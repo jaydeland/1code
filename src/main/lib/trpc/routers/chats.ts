@@ -10,7 +10,7 @@ import {
 } from "../../git"
 import { execWithShellEnv } from "../../git/shell-env"
 import simpleGit from "simple-git"
-import { getAuthManager, getBaseUrl } from "../../../index"
+import { getBaseUrl } from "../../../index"
 import {
   trackWorkspaceCreated,
   trackWorkspaceArchived,
@@ -517,14 +517,11 @@ export const chatsRouter = router({
     .input(z.object({ userMessage: z.string() }))
     .mutation(async ({ input }) => {
       try {
-        const authManager = getAuthManager()
-        const token = await authManager.getValidToken()
         // Always use production API for name generation
         const apiUrl = "https://21st.dev"
 
         console.log(
-          "[generateSubChatName] Calling API with token:",
-          token ? "present" : "missing",
+          "[generateSubChatName] Calling API (no auth)",
         )
         console.log(
           "[generateSubChatName] URL:",
@@ -537,7 +534,6 @@ export const chatsRouter = router({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              ...(token && { "X-Desktop-Token": token }),
             },
             body: JSON.stringify({ userMessage: input.userMessage }),
           },

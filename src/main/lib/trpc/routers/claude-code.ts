@@ -1,18 +1,9 @@
 import { z } from "zod"
 import { shell, safeStorage } from "electron"
 import { router, publicProcedure } from "../index"
-import { getAuthManager } from "../../../index"
 import { getApiUrl } from "../../config"
 import { getDatabase, claudeCodeCredentials } from "../../db"
 import { eq } from "drizzle-orm"
-
-/**
- * Get desktop auth token for server API calls
- */
-async function getDesktopToken(): Promise<string | null> {
-  const authManager = getAuthManager()
-  return authManager.getValidToken()
-}
 
 /**
  * Encrypt token using Electron's safeStorage
@@ -62,15 +53,9 @@ export const claudeCodeRouter = router({
    * Start OAuth flow - calls server to create sandbox
    */
   startAuth: publicProcedure.mutation(async () => {
-    const token = await getDesktopToken()
-    if (!token) {
-      throw new Error("Not authenticated with 21st.dev")
-    }
-
     // Server creates sandbox (has CodeSandbox SDK)
     const response = await fetch(`${getApiUrl()}/api/auth/claude-code/start`, {
       method: "POST",
-      headers: { "x-desktop-token": token },
     })
 
     if (!response.ok) {
@@ -176,10 +161,6 @@ export const claudeCodeRouter = router({
         throw new Error("Invalid OAuth token format")
       }
 
-      // Get user ID for reference
-      const authManager = getAuthManager()
-      const user = authManager.getUser()
-
       // Encrypt and store locally
       const encryptedToken = encryptToken(oauthToken)
       const db = getDatabase()
@@ -194,7 +175,7 @@ export const claudeCodeRouter = router({
           id: "default",
           oauthToken: encryptedToken,
           connectedAt: new Date(),
-          userId: user?.id ?? null,
+          userId: null,
         })
         .run()
 
