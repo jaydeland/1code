@@ -2,7 +2,7 @@
 
 **Last Updated:** 2025-01-17
 **Current Phase:** 03-claude-settings
-**Current Plan:** 03-claude-settings-02 (COMPLETE)
+**Current Plan:** 03-claude-settings-03 (COMPLETE)
 
 ## Completed Work
 
@@ -35,6 +35,17 @@
   - Migration generated: `drizzle/0006_rainy_the_watchers.sql`
   - SUMMARY.md created at `.planning/phases/03-claude-settings/03-claude-settings-02-SUMMARY.md`
 
+- Plan 03: **03-claude-settings-03** - Complete
+  - All 6 tasks executed successfully
+  - 5 files modified + 1 migration created:
+    - `src/main/lib/db/schema/index.ts` - Added authMode, apiKey, bedrockRegion fields
+    - `src/main/lib/trpc/routers/claude-settings.ts` - Added encrypt/decrypt helpers, auth mode handling
+    - `src/main/lib/trpc/routers/claude.ts` - Added AWS credential detection, auth mode routing
+    - `src/renderer/features/agents/components/settings-tabs/agents-claude-code-tab.tsx` - Added credential selector, API key input, Bedrock region input
+    - `drizzle/0007_fixed_speed.sql` - Migration for new auth fields
+  - Migration generated: `drizzle/0007_fixed_speed.sql`
+  - SUMMARY.md created at `.planning/phases/03-claude-settings/03-claude-settings-03-SUMMARY.md`
+
 ## Codebase Status
 
 ### Authentication
@@ -52,7 +63,7 @@
 - `identify()` function available but not used for auth
 
 ### Claude Code Integration
-**Status:** Enhanced with configurable settings
+**Status:** Enhanced with configurable settings and multiple auth modes
 - Local token storage still works (encrypted with safeStorage)
 - Server integration no longer requires desktop auth token
 - User ID stored as null
@@ -60,12 +71,16 @@
 - **NEW:** Users can set custom environment variables (e.g., ANTHROPIC_MODEL)
 - **NEW:** Users can specify custom Claude config directory (defaults to isolated per-subchat)
 - **NEW:** Users can view and enable/disable MCP servers from ~/.claude/
+- **NEW:** Multiple authentication modes:
+  - OAuth (browser-based flow)
+  - AWS Bedrock (uses AWS credentials from env vars or ~/.aws/credentials)
+  - API Key (direct Anthropic API key with encrypted storage)
 - Settings persist in SQLite database (`claude_code_settings` table)
 
 ## Next Steps
 
 ### Phase 03: Claude Settings
-- Plans 01 and 02 are complete
+- Plans 01, 02, and 03 are complete
 - Additional plans may be added for further Claude Code configuration options
 
 ### Phase Directory
