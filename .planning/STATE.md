@@ -1,8 +1,8 @@
 # Project State
 
 **Last Updated:** 2025-01-17
-**Current Phase:** 01-remove-auth
-**Current Plan:** 01-remove-auth-01 (COMPLETE)
+**Current Phase:** 02-shell-detection
+**Current Plan:** 02-shell-detection-01 (READY)
 
 ## Completed Work
 
@@ -37,4 +37,10 @@
 
 ## Next Steps
 
-See `.planning/phases/01-remove-auth/` for remaining plans in this phase.
+### Phase 02: Shell Detection (READY)
+- **Objective:** Consolidate shell detection to use unified `getDefaultShell()` across terminal and Claude Code CLI
+- **Plan:** 02-shell-detection-01 (4 tasks)
+- **Key Finding:** Code already respects user's system default via `process.env.SHELL` - this phase consolidates the implementation
+
+### Phase Directory
+See `.planning/phases/02-shell-detection/` for phase plan.
