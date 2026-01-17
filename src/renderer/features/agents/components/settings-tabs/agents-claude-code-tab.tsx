@@ -65,14 +65,7 @@ export function AgentsClaudeCodeTab() {
   } = trpc.claudeSettings.getSettings.useQuery()
 
   // Query MCP servers
-  const { data: mcpData, refetch: refetchMcp } = trpc.claudeSettings.listMcpServers.useQuery(
-    {},
-    {
-      onSuccess: (data) => {
-        setMcpServers(data.servers)
-      },
-    }
-  )
+  const { data: mcpData, refetch: refetchMcp } = trpc.claudeSettings.listMcpServers.useQuery()
 
   // Update settings mutation
   const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
@@ -172,6 +165,13 @@ export function AgentsClaudeCodeTab() {
       )
     }
   }, [claudeSettings])
+
+  // Sync MCP servers from query
+  useEffect(() => {
+    if (mcpData?.servers) {
+      setMcpServers(mcpData.servers)
+    }
+  }, [mcpData])
 
   const handleStartAuth = () => {
     setFlowState({ step: "starting" })

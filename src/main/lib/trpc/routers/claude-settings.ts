@@ -71,9 +71,9 @@ export const claudeSettingsRouter = router({
     .input(
       z.object({
         customBinaryPath: z.string().nullable().optional(),
-        customEnvVars: z.record(z.string()).optional(),
+        customEnvVars: z.record(z.string(), z.string()).optional(),
         customConfigDir: z.string().nullable().optional(),
-        mcpServerSettings: z.record(z.object({ enabled: z.boolean() })).optional(),
+        mcpServerSettings: z.record(z.string(), z.object({ enabled: z.boolean() })).optional(),
       })
     )
     .mutation(({ input }) => {
@@ -177,9 +177,10 @@ export const claudeSettingsRouter = router({
       .where(eq(claudeCodeSettings.id, "default"))
       .get()
 
-    const enabledServers = settings?.mcpServerSettings
-      ? JSON.parse(settings.mcpServerSettings)
-      : {}
+    const enabledServers = parseJsonSafely<Record<string, { enabled: boolean }>>(
+      settings?.mcpServerSettings ?? "{}",
+      {}
+    )
 
     // Mark enabled servers
     for (const server of servers) {
