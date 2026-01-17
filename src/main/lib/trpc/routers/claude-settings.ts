@@ -1,3 +1,6 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+import os from "node:os"
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
@@ -119,4 +122,72 @@ export const claudeSettingsRouter = router({
 
       return { success: true }
     }),
+
+  /**
+   * List available MCP servers from ~/.claude/
+   * Scans for MCP server directories and reads their package.json for metadata
+   */
+  listMcpServers: publicProcedure.query(async () => {
+    const claudeDir = path.join(os.homedir(), ".claude")
+    const servers: Array<{
+      id: string
+      name: string
+      description: string
+      enabled: boolean
+    }> = []
+
+    try {
+      const entries = await fs.readdir(claudeDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (!entry.isDirectory() || !entry.name.startsWith("mcp-") && !entry.name.includes("-mcp")) {
+          continue
+        }
+
+        const pkgPath = path.join(claudeDir, entry.name, "package.json")
+        try {
+          const pkgContent = await fs.readFile(pkgPath, "utf-8")
+          const pkg = JSON.parse(pkgContent)
+
+          servers.push({
+            id: entry.name,
+            name: pkg.displayName || pkg.name || entry.name,
+            description: pkg.description || "",
+            enabled: false, // Will be overridden by settings
+          })
+        } catch {
+          // No package.json, add basic entry
+          servers.push({
+            id: entry.name,
+            name: entry.name,
+            description: "",
+            enabled: false,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("[claude-settings] Failed to list MCP servers:", error)
+    }
+
+    // Get user's enabled servers from settings
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    const enabledServers = settings?.mcpServerSettings
+      ? JSON.parse(settings.mcpServerSettings)
+      : {}
+
+    // Mark enabled servers
+    for (const server of servers) {
+      if (enabledServers[server.id]?.enabled) {
+        server.enabled = true
+      }
+    }
+
+    return { servers }
+  }),
 })
