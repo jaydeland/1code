@@ -163,16 +163,6 @@ export function trackAppOpened() {
 }
 
 /**
- * Track successful authentication
- */
-export function trackAuthCompleted(userId: string, email?: string) {
-  identify(userId, email ? { email } : undefined)
-  capture("auth_completed", {
-    user_id: userId,
-  })
-}
-
-/**
  * Track project opened
  */
 export function trackProjectOpened(project: {

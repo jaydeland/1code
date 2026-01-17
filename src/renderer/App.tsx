@@ -10,7 +10,7 @@ import {
 } from "./features/onboarding"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { appStore } from "./lib/jotai-store"
-import { initAnalytics, identify, shutdown } from "./lib/analytics"
+import { initAnalytics, shutdown } from "./lib/analytics"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
 import { anthropicOnboardingCompletedAtom } from "./lib/atoms"
 import { selectedProjectAtom } from "./features/agents/atoms"
