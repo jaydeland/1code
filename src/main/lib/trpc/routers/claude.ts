@@ -102,11 +102,13 @@ function getClaudeCodeToken(): string | null {
 }
 
 /**
- * Get Claude Code custom settings (binary path, env vars)
+ * Get Claude Code custom settings (binary path, env vars, config dir, MCP settings)
  */
 function getClaudeCodeSettings(): {
   customBinaryPath: string | null
   customEnvVars: Record<string, string>
+  customConfigDir: string | null
+  mcpServerSettings: Record<string, { enabled: boolean }>
 } {
   try {
     const db = getDatabase()
@@ -117,20 +119,26 @@ function getClaudeCodeSettings(): {
       .get()
 
     if (!settings) {
-      return { customBinaryPath: null, customEnvVars: {} }
+      return { customBinaryPath: null, customEnvVars: {}, customConfigDir: null, mcpServerSettings: {} }
     }
 
     const customEnvVars = settings.customEnvVars
       ? JSON.parse(settings.customEnvVars)
       : {}
 
+    const mcpServerSettings = settings.mcpServerSettings
+      ? JSON.parse(settings.mcpServerSettings)
+      : {}
+
     return {
       customBinaryPath: settings.customBinaryPath,
       customEnvVars,
+      customConfigDir: settings.customConfigDir,
+      mcpServerSettings,
     }
   } catch (error) {
     console.error("[claude] Error getting Claude Code settings:", error)
-    return { customBinaryPath: null, customEnvVars: {} }
+    return { customBinaryPath: null, customEnvVars: {}, customConfigDir: null, mcpServerSettings: {} }
   }
 }
 
@@ -403,25 +411,27 @@ export const claudeRouter = router({
             // Get Claude Code OAuth token from local storage (optional)
             const claudeCodeToken = getClaudeCodeToken()
 
-            // Create isolated config directory per subChat to prevent session contamination
+            // Use custom config dir if provided, otherwise use per-subchat isolated
             // The Claude binary stores sessions in ~/.claude/ based on cwd, which causes
             // cross-chat contamination when multiple chats use the same project folder
-            const isolatedConfigDir = path.join(
+            const { customBinaryPath, customEnvVars, customConfigDir } = getClaudeCodeSettings()
+            const claudeConfigDir = customConfigDir || path.join(
               app.getPath("userData"),
               "claude-sessions",
               input.subChatId
             )
 
-            // Ensure isolated config dir exists and symlink skills/agents from ~/.claude/
-            // This is needed because SDK looks for skills at $CLAUDE_CONFIG_DIR/skills/
-            try {
-              await fs.mkdir(isolatedConfigDir, { recursive: true })
+            // Ensure config dir exists
+            await fs.mkdir(claudeConfigDir, { recursive: true })
 
+            // If using isolated dir (not custom), symlink skills/agents from ~/.claude/
+            // This is needed because SDK looks for skills at $CLAUDE_CONFIG_DIR/skills/
+            if (!customConfigDir) {
               const homeClaudeDir = path.join(os.homedir(), ".claude")
               const skillsSource = path.join(homeClaudeDir, "skills")
-              const skillsTarget = path.join(isolatedConfigDir, "skills")
+              const skillsTarget = path.join(claudeConfigDir, "skills")
               const agentsSource = path.join(homeClaudeDir, "agents")
-              const agentsTarget = path.join(isolatedConfigDir, "agents")
+              const agentsTarget = path.join(claudeConfigDir, "agents")
 
               // Symlink skills directory if source exists and target doesn't
               try {
@@ -432,7 +442,7 @@ export const claudeRouter = router({
                   console.log(`[claude] Symlinked skills: ${skillsTarget} -> ${skillsSource}`)
                 }
               } catch (symlinkErr) {
-                // Ignore symlink errors (might already exist or permission issues)
+                // Ignore symlink errors
               }
 
               // Symlink agents directory if source exists and target doesn't
@@ -444,24 +454,19 @@ export const claudeRouter = router({
                   console.log(`[claude] Symlinked agents: ${agentsTarget} -> ${agentsSource}`)
                 }
               } catch (symlinkErr) {
-                // Ignore symlink errors (might already exist or permission issues)
+                // Ignore symlink errors
               }
-            } catch (mkdirErr) {
-              console.error(`[claude] Failed to setup isolated config dir:`, mkdirErr)
             }
 
             // Build final env - only add OAuth token if we have one
-            // Get user's custom settings (binary path and env vars)
-            const { customBinaryPath, customEnvVars } = getClaudeCodeSettings()
-
             const finalEnv = {
               ...claudeEnv,
               ...customEnvVars, // User-configured env vars (e.g., for Claude settings.json)
               ...(claudeCodeToken && {
                 CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
               }),
-              // Isolate Claude's config/session storage per subChat
-              CLAUDE_CONFIG_DIR: isolatedConfigDir,
+              // Use custom or isolated Claude config directory
+              CLAUDE_CONFIG_DIR: claudeConfigDir,
             }
 
             // Use custom binary path if provided, otherwise use bundled binary
