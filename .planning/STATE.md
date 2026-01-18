@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2025-01-18)
 ## Current Position
 
 Phase: 1 of 3 (Discovery Layer)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2025-01-18 — Project initialized
+Plan: 01 of 3 (Workflows Router)
+Status: Plan 01-01 complete
+Last activity: 2026-01-18 — Workflows router implemented
 
-Progress: ░░░░░░░░░░ 0%
+Progress: ██░░░░░░░░░ 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 15 min
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| — | — | — | — |
+| 01-discovery-layer | 1 | 3 | 15min |
 
 **Recent Trend:**
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: 15min
+- Trend: — (insufficient data)
 
 ## Accumulated Context
 
@@ -40,7 +40,10 @@ Progress: ░░░░░░░░░░ 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-(None yet)
+1. **Reused gray-matter dependency** (2026-01-18): Already installed for skills router, consistent parsing approach for YAML frontmatter
+2. **Path validation pattern** (2026-01-18): Each scanner validates filenames don't contain "..", "/", or "\\" to prevent path traversal
+3. **Graceful degradation** (2026-01-18): If directory doesn't exist, return empty array rather than error
+4. **Config directory resolution** (2026-01-18): Read customConfigDir from claudeCodeSettings table, fallback to ~/.claude/
 
 ### Deferred Issues
 
@@ -52,6 +55,11 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2025-01-18
-Stopped at: Project initialization complete
+Last session: 2026-01-18
+Stopped at: Plan 01-01 complete, workflows router functional
 Resume file: None
+
+## Next Plan
+
+Plan 01-02: UI components for browsing discovered workflows
+Status: Not started
