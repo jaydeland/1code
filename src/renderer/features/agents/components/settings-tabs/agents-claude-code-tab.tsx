@@ -49,6 +49,7 @@ export function AgentsClaudeCodeTab() {
   const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey">("oauth")
   const [apiKey, setApiKey] = useState("")
   const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
+  const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -169,6 +170,7 @@ export function AgentsClaudeCodeTab() {
       )
       setAuthMode(claudeSettings.authMode || "oauth")
       setBedrockRegion(claudeSettings.bedrockRegion || "us-east-1")
+      setAnthropicBaseUrl(claudeSettings.anthropicBaseUrl || "")
       // Don't set API key from masked value - user needs to enter it
     }
   }, [claudeSettings])
@@ -318,6 +320,17 @@ export function AgentsClaudeCodeTab() {
                   <p className="text-xs text-muted-foreground">
                     Your API key is encrypted and stored locally. Only used when API Key mode is selected.
                   </p>
+                  <Label className="text-sm">Base URL (optional)</Label>
+                  <Input
+                    type="text"
+                    value={anthropicBaseUrl}
+                    onChange={(e) => setAnthropicBaseUrl(e.target.value)}
+                    placeholder="https://api.anthropic.com"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Custom API base URL. Leave empty to use the default.
+                  </p>
                 </div>
               )}
 
@@ -346,6 +359,7 @@ export function AgentsClaudeCodeTab() {
                       authMode,
                       ...(authMode === "apiKey" && apiKey && { apiKey }),
                       bedrockRegion,
+                      anthropicBaseUrl: anthropicBaseUrl || null,
                     })
                   }}
                   disabled={updateSettings.isPending}
@@ -417,7 +431,7 @@ export function AgentsClaudeCodeTab() {
             {/* API Key Mode Status */}
             {authMode === "apiKey" && flowState.step === "idle" && (
               <div className="space-y-4">
-                {apiKey ? (
+                {claudeSettings?.apiKey ? (
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                       <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
