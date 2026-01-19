@@ -24,6 +24,57 @@ bun run db:generate      # Generate migrations from schema
 bun run db:push          # Push schema directly (dev only)
 ```
 
+## Development Environment
+
+This project uses **Flox** for reproducible development environments. The 1code environment inherits from the devyard environment (TypeScript tooling, Node.js, Python, etc.) and adds app-specific dependencies (bun, electron).
+
+### Inheritance Pattern
+
+```
+devyard/.flox/env/manifest.toml
+  ├─ TypeScript language server
+  ├─ Node.js, Python, etc.
+  └─ Claude Code LSP integration
+
+1code/.flox/env/manifest.toml
+  ├─ [include] → devyard (via symlink)
+  ├─ bun (package manager)
+  └─ electron (desktop framework)
+```
+
+This follows the same pattern as the avatar project. TypeScript LSP is available via inheritance.
+
+### First-time Setup
+
+```bash
+# Install Flox (if not already installed)
+curl -fsSL https://install.flox.dev | bash
+
+# Activate the 1Code environment (inherits from devyard)
+cd /Users/jdeland/1code
+flox activate
+```
+
+### Daily Workflow
+
+```bash
+# Activate environment (once per terminal session)
+flox activate
+
+# Then use normal commands
+bun install
+bun run dev
+```
+
+**Key points:**
+- Flox manages: bun runtime, electron binary
+- Inherited from devyard: TypeScript LSP, Node.js, Python, kubectl, etc.
+- package.json manages: React, Electron libraries, UI components, all npm packages
+- Run `flox activate` once per terminal session (or use direnv for auto-activation)
+- The environment sets `ELECTRON_SKIP_BINARY_DOWNLOAD=1` to prevent duplicate electron binaries
+
+**Without Flox:** The app will try to use system-installed bun/electron, which may have version mismatches. Always activate Flox before development.
+
 ## Architecture
 
 ```

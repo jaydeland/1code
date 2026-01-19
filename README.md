@@ -17,17 +17,32 @@ By [21st.dev](https://21st.dev) team
 
 ## Installation
 
+### Prerequisites
+
+- **Flox** - For reproducible development environment ([install instructions](https://flox.dev/docs))
+- **Devyard environment** - 1code inherits TypeScript tooling from the devyard Flox environment (must be accessible via symlink at `./devyard`)
+- **Python 3** - For native module compilation (inherited from devyard)
+- **Xcode Command Line Tools** (macOS) - Run `xcode-select --install`
+
 ### Option 1: Build from source (free)
 
 ```bash
-# Prerequisites: Bun, Python, Xcode Command Line Tools (macOS)
+# 1. Activate Flox environment (manages bun, electron, inherits from devyard)
+cd /path/to/1code
+flox activate
+
+# 2. Install JavaScript dependencies
 bun install
-bun run claude:download  # Download Claude binary (required!)
+
+# 3. Download Claude binary (required for agent functionality)
+bun run claude:download
+
+# 4. Build and package
 bun run build
 bun run package:mac  # or package:win, package:linux
 ```
 
-> **Important:** The `claude:download` step downloads the Claude CLI binary which is required for the agent chat to work. If you skip this step, the app will build but agent functionality won't work.
+> **Important:** The Flox environment provides bun, electron, and inherits TypeScript LSP from devyard. The `claude:download` step downloads the Claude CLI binary which is required for agent chat functionality.
 
 ### Option 2: Subscribe to 1code.dev (recommended)
 
@@ -38,8 +53,13 @@ Your subscription helps us maintain and improve 1Code.
 ## Development
 
 ```bash
+# First time setup
+flox activate
 bun install
 bun run claude:download  # First time only
+
+# Daily workflow
+flox activate  # Once per terminal session
 bun run dev
 ```
 
