@@ -143,16 +143,16 @@ export function WorkflowPreview() {
   const displayPath = useMemo(() => {
     if (!contentPath) return ""
 
-    // Try to make the path more readable
-    const homeDir = process.env.HOME || ""
-    if (contentPath.startsWith(homeDir)) {
-      return contentPath.replace(homeDir, "~")
-    }
-
-    // Also try to show relative to .claude directory
+    // Try to show relative to .claude directory first
     const claudeIndex = contentPath.indexOf(".claude")
     if (claudeIndex !== -1) {
       return contentPath.substring(claudeIndex)
+    }
+
+    // If no .claude in path, show just the filename
+    const parts = contentPath.split("/")
+    if (parts.length > 1) {
+      return "..." + "/" + parts[parts.length - 1]
     }
 
     return contentPath
