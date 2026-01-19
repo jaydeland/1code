@@ -66,45 +66,61 @@ export const workflowsTreeExpandedNodesAtom = atom<Set<string>>(
 
 /**
  * Toggle a single node's expanded state
+ * Note: Reads from derived Set atom, stores to storage as array
  */
 export const workflowsToggleNodeAtom = atom(
   null,
   (get, set, nodeKey: string) => {
-    const current = get(workflowsTreeExpandedNodesStorageAtom)
-    if (current.includes(nodeKey)) {
-      set(workflowsTreeExpandedNodesStorageAtom, current.filter((k) => k !== nodeKey))
+    // Read from derived atom to ensure we get a Set
+    const currentSet = get(workflowsTreeExpandedNodesAtom)
+    if (currentSet.has(nodeKey)) {
+      // Remove from set, store as array
+      const newArray = Array.from(currentSet).filter((k) => k !== nodeKey)
+      set(workflowsTreeExpandedNodesStorageAtom, newArray)
     } else {
-      set(workflowsTreeExpandedNodesStorageAtom, [...current, nodeKey])
+      // Add to set, store as array
+      const newArray = [...currentSet, nodeKey]
+      set(workflowsTreeExpandedNodesStorageAtom, newArray)
     }
   },
 )
 
 /**
  * Expand all nodes in a category
+ * Note: Reads from derived Set atom, stores to storage as array
  */
 export const workflowsExpandCategoryAtom = atom(
   null,
   (get, set, nodeKeys: string[]) => {
-    const current = get(workflowsTreeExpandedNodesStorageAtom)
-    const combined = [...new Set([...current, ...nodeKeys])] // Dedupe and add
-    set(workflowsTreeExpandedNodesStorageAtom, combined)
+    const currentSet = get(workflowsTreeExpandedNodesAtom)
+    // Add new keys to set, deduplicate, store as array
+    const newSet = new Set([...currentSet, ...nodeKeys])
+    set(workflowsTreeExpandedNodesStorageAtom, Array.from(newSet))
   },
 )
 
 /**
  * Collapse all nodes in a category
+ * Note: Reads from derived Set atom, stores to storage as array
  */
 export const workflowsCollapseCategoryAtom = atom(
   null,
   (get, set, nodeKeys: string[]) => {
-    const current = get(workflowsTreeExpandedNodesStorageAtom)
-    const remaining = current.filter((k) => !nodeKeys.includes(k))
-    set(workflowsTreeExpandedNodesStorageAtom, remaining)
+    const currentSet = get(workflowsTreeExpandedNodesAtom)
+    // Filter out category keys from set, store as array
+    const newSet = new Set()
+    for (const item of currentSet) {
+      if (!nodeKeys.includes(item)) {
+        newSet.add(item)
+      }
+    }
+    set(workflowsTreeExpandedNodesStorageAtom, Array.from(newSet))
   },
 )
 
 /**
  * Expand all nodes (helper for "Expand All" action)
+ * Note: Stores as array for localStorage compatibility
  */
 export const workflowsExpandAllAtom = atom(null, (_get, set, allNodeKeys: string[]) => {
   set(workflowsTreeExpandedNodesStorageAtom, allNodeKeys)
@@ -112,6 +128,7 @@ export const workflowsExpandAllAtom = atom(null, (_get, set, allNodeKeys: string
 
 /**
  * Collapse all nodes (helper for "Collapse All" action)
+ * Note: Stores as array for localStorage compatibility
  */
 export const workflowsCollapseAllAtom = atom(null, (_get, set) => {
   set(workflowsTreeExpandedNodesStorageAtom, [])
