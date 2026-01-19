@@ -41,9 +41,14 @@ const workflowsTreeExpandedNodesStorageAtom = atomWithStorage<Set<string>>(
 
 /**
  * Read-write atom for expanded nodes set
+ * Note: atomWithStorage serializes to JSON, so we convert array <-> Set
  */
-export const workflowsTreeExpandedNodesAtom = atom(
-  (get) => get(workflowsTreeExpandedNodesStorageAtom),
+export const workflowsTreeExpandedNodesAtom = atom<Set<string>>(
+  (get) => {
+    const stored = get(workflowsTreeExpandedNodesStorageAtom)
+    // Convert from array (if deserialized from storage) or ensure it's a Set
+    return Array.isArray(stored) ? new Set(stored) : stored
+  },
   (get, set, newSet: Set<string>) => {
     set(workflowsTreeExpandedNodesStorageAtom, newSet)
   },
