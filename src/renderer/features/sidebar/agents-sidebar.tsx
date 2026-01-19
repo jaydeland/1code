@@ -23,6 +23,7 @@ import {
   isFullscreenAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
+import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
@@ -1981,6 +1982,9 @@ export function AgentsSidebar({
           )}
         />
       </div>
+
+      {/* Workflows Section */}
+      <WorkflowsSidebarSection />
 
       {/* Footer - Multi-select toolbar or normal footer */}
       <AnimatePresence mode="wait">

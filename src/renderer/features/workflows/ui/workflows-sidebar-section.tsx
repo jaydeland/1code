@@ -3,9 +3,9 @@
 import React from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { ChevronDown, Workflow } from "lucide-react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { cn } from "../../../lib/utils"
-import { workflowsSidebarOpenAtom, workflowsRefreshTriggerAtom } from "../atoms"
+import { workflowsSidebarOpenAtom } from "../atoms"
 import { WorkflowTree } from "./workflow-tree"
 
 interface WorkflowsSidebarSectionProps {
@@ -14,7 +14,6 @@ interface WorkflowsSidebarSectionProps {
 
 export function WorkflowsSidebarSection({ className }: WorkflowsSidebarSectionProps) {
   const [isOpen, setIsOpen] = useAtom(workflowsSidebarOpenAtom)
-  const refreshTrigger = useAtomValue(workflowsRefreshTriggerAtom)
 
   return (
     <div className={cn("border-t border-border/50", className)}>
@@ -48,7 +47,7 @@ export function WorkflowsSidebarSection({ className }: WorkflowsSidebarSectionPr
             className="overflow-hidden"
           >
             <div className="px-2 pb-2">
-              <WorkflowTree key={`workflows-tree-${refreshTrigger}`} />
+              <WorkflowTree />
             </div>
           </motion.div>
         )}

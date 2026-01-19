@@ -546,3 +546,14 @@ export const workflowsRouter = router({
     }
   }),
 })
+
+// ============ TYPE EXPORTS ============
+
+export type {
+  AgentMetadata,
+  CommandMetadata,
+  SkillMetadata,
+  DependencyGraph,
+  AgentWithDependencies,
+  WorkflowGraph,
+}

@@ -13,47 +13,8 @@ import {
   type WorkflowNode,
 } from "../atoms"
 
-// Types imported from workflows router (will be exported in Task 3)
-type DependencyGraph = {
-  tools: string[]
-  skills: string[]
-  mcpServers: string[]
-  agents: string[]
-  commands: string[]
-}
-
-type AgentMetadata = {
-  id: string
-  name: string
-  description: string
-  tools: string[]
-  model: string
-  sourcePath: string
-}
-
-type AgentWithDependencies = AgentMetadata & {
-  dependencies: DependencyGraph
-}
-
-type CommandMetadata = {
-  id: string
-  name: string
-  description: string
-  sourcePath: string
-}
-
-type SkillMetadata = {
-  id: string
-  name: string
-  description: string
-  sourcePath: string
-}
-
-type WorkflowGraph = {
-  agents: AgentWithDependencies[]
-  commands: CommandMetadata[]
-  skills: SkillMetadata[]
-}
+// Types from tRPC - inferred from workflows router
+type WorkflowGraph = ReturnType<typeof trpc.workflows.getWorkflowGraph.useQuery>["data"]
 
 interface TreeNodeProps {
   nodeKey: string
@@ -109,7 +70,8 @@ const TreeNode = React.memo(function TreeNode({
             className="flex-shrink-0"
           >
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </motion.div        )}
+          </motion.div>
+        )}
         {icon && <div className="flex-shrink-0">{icon}</div>}
         <span className="truncate text-sm font-medium">{label}</span>
         {description && (
@@ -203,15 +165,12 @@ const DependencyCategory = React.memo(function DependencyCategory({
   )
 })
 
-interface WorkflowTreeProps {
-  data: WorkflowGraph | null | undefined
-  isLoading?: boolean
-}
-
-export function WorkflowTree({ data, isLoading }: WorkflowTreeProps) {
+export function WorkflowTree() {
   const expandedNodes = useAtomValue(workflowsTreeExpandedNodesAtom)
   const toggleNode = useSetAtom(workflowsToggleNodeAtom)
   const setSelectedNode = useSetAtom(selectedWorkflowNodeAtom)
+
+  const { data, isLoading } = trpc.workflows.getWorkflowGraph.useQuery()
 
   const isNodeExpanded = (key: string) => expandedNodes.has(key)
 
@@ -219,7 +178,7 @@ export function WorkflowTree({ data, isLoading }: WorkflowTreeProps) {
     toggleNode(key)
   }
 
-  const handleSelectAgent = (agent: AgentWithDependencies) => {
+  const handleSelectAgent = (agent: any) => {
     setSelectedNode({
       type: "agent",
       id: agent.id,
