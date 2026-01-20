@@ -41,6 +41,7 @@ Progress: ██████████ 100%
 ### Roadmap Evolution
 
 - Phase 4 added (2026-01-19): Update dev env management to use Flox similar to ../avatar
+- Phase 5 added (2026-01-20): AWS Bedrock authentication with SSO profile selection
 
 ### Decisions
 
@@ -62,6 +63,11 @@ Recent decisions affecting current work:
 13. **Workflows atoms with localStorage persistence** (2026-01-18): Using atomWithStorage for sidebar state, tree expansion (Set<string>), selected node, and refresh trigger
 14. **Direct tRPC query in UI components** (2026-01-18): WorkflowTree uses tRPC useQuery directly instead of prop drilling for simplicity
 15. **3-level tree nesting structure** (2026-01-18): Category (Agents/Commands/Skills) -> Item -> Dependency categories (Tools, Skills, MCP servers, Agents, Commands)
+
+### Pending Todos
+
+2 pending todos in `.planning/todos/pending/`:
+- 2026-01-20: Allow workspaces without git repos (area: projects)
 
 ### Deferred Issues
 
