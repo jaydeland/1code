@@ -166,18 +166,17 @@ export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
 // Settings dialog
 export type SettingsTab =
   | "profile"
-  | "claude-code"
   | "appearance"
+  | "keyboard"
   | "preferences"
-  | "advanced"
   | "models"
+  | "advanced"
   | "skills"
   | "agents"
   | "mcp"
   | "worktrees"
-  | "debug"
   | "beta"
-  | "keyboard"
+  | "debug"
   | `project-${string}` // Dynamic project tabs
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("profile")
 export const agentsSettingsDialogOpenAtom = atom<boolean>(false)

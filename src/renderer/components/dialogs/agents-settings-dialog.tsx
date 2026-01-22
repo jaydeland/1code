@@ -23,6 +23,8 @@ import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
 import { AgentsMcpTab } from "./settings-tabs/agents-mcp-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
+import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
+import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
 import { trpc } from "../../lib/trpc"
 
 // Hook to detect narrow screen
@@ -87,6 +89,12 @@ const MAIN_TABS = [
 // Advanced/experimental tabs
 const ADVANCED_TABS = [
   {
+    id: "advanced" as SettingsTab,
+    label: "Advanced",
+    icon: SettingsIcon,
+    description: "Advanced configuration and worktree settings",
+  },
+  {
     id: "skills" as SettingsTab,
     label: "Skills",
     icon: SkillIconFilled,
@@ -103,6 +111,12 @@ const ADVANCED_TABS = [
     label: "MCP Servers",
     icon: OriginalMCPIcon,
     description: "Model Context Protocol servers",
+  },
+  {
+    id: "worktrees" as SettingsTab,
+    label: "Worktrees",
+    icon: FolderOpen,
+    description: "Manage git worktrees",
   },
   {
     id: "beta" as SettingsTab,
@@ -295,12 +309,16 @@ export function AgentsSettingsDialog({
         return <AgentsPreferencesTab />
       case "models":
         return <AgentsModelsTab />
+      case "advanced":
+        return <AgentsAdvancedSettingsTab />
       case "skills":
         return <AgentsSkillsTab />
       case "agents":
         return <AgentsCustomAgentsTab />
       case "mcp":
         return <AgentsMcpTab />
+      case "worktrees":
+        return <AgentsWorktreesTab />
       case "beta":
         return <AgentsBetaTab />
       case "debug":

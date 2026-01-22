@@ -24,6 +24,10 @@ import {
   showWorkspaceIconAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
+import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
+import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
+import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
+import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
@@ -1377,6 +1381,8 @@ export function AgentsSidebar({
   onChatSelect,
 }: AgentsSidebarProps) {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+  const setSelectedCategory = useSetAtom(selectedWorkflowCategoryAtom)
+  const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
@@ -2043,11 +2049,17 @@ export function AgentsSidebar({
     // In multi-select mode, clicking on the item still navigates to the chat
     // Only clicking on the checkbox toggles selection
     setSelectedChatId(chatId)
+
+    // Clear workflow category when chat is selected (to show chat view)
+    setSelectedCategory(null)
+    // Clear MCP category when chat is selected
+    setSelectedMcpCategory(null)
+
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, isMobileFullscreen, onChatSelect])
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedCategory, setSelectedMcpCategory, isMobileFullscreen, onChatSelect])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
@@ -2636,6 +2648,12 @@ export function AgentsSidebar({
           className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none bg-gradient-to-t from-tl-background via-tl-background/50 to-transparent transition-opacity duration-200 opacity-0"
         />
       </div>
+
+      {/* Workflows Section */}
+      <WorkflowsSidebarSection />
+
+      {/* MCP Servers Section */}
+      <McpSidebarSection />
 
       {/* Footer - Multi-select toolbar or normal footer */}
       <AnimatePresence mode="wait">
