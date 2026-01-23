@@ -25,7 +25,7 @@ import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
-import { AgentsClaudeCodeTab } from "../../../features/agents/components/settings-tabs/agents-claude-code-tab"
+import { AgentsClaudeCodeTab } from "../../features/agents/components/settings-tabs/agents-claude-code-tab"
 import { trpc } from "../../lib/trpc"
 
 // Hook to detect narrow screen
