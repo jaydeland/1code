@@ -68,15 +68,30 @@ export const claudeCodeRouter = router({
    */
   getIntegration: publicProcedure.query(() => {
     const db = getDatabase()
+
+    // Check OAuth credentials
     const cred = db
       .select()
       .from(claudeCodeCredentials)
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
+    // Check AWS Bedrock credentials
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    const hasOAuth = !!cred?.oauthToken
+    const hasAWS = settings?.authMode === "aws" &&
+                   !!settings?.ssoAccessToken &&
+                   !!settings?.awsAccessKeyId
+
     return {
-      isConnected: !!cred?.oauthToken,
+      isConnected: hasOAuth || hasAWS,
       connectedAt: cred?.connectedAt?.toISOString() ?? null,
+      authMode: settings?.authMode || "oauth",
     }
   }),
 
