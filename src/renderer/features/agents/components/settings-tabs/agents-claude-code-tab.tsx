@@ -238,7 +238,7 @@ export function AgentsClaudeCodeTab() {
             {/* Auth Mode Selector */}
             <div className="space-y-3 pb-4 border-b border-border">
               <Label className="text-sm font-medium">Authentication Mode</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button
                   variant={authMode === "oauth" ? "default" : "outline"}
                   onClick={() => setAuthMode("oauth")}
@@ -259,13 +259,6 @@ export function AgentsClaudeCodeTab() {
                   size="sm"
                 >
                   API Key
-                </Button>
-                <Button
-                  variant={authMode === "devyard" ? "default" : "outline"}
-                  onClick={() => setAuthMode("devyard")}
-                  size="sm"
-                >
-                  Devyard
                 </Button>
               </div>
 

@@ -123,7 +123,7 @@ export function AwsStatusBar() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-6 bg-muted/50 border-t border-border flex items-center px-3 text-xs text-muted-foreground z-40">
+    <div className="h-6 bg-muted/50 border-t border-border flex items-center px-3 text-xs text-muted-foreground flex-shrink-0">
       <div className="flex items-center gap-4 flex-1">
         {/* AWS Icon */}
         <div className="flex items-center gap-1.5">
