@@ -9,6 +9,9 @@ import {
   Sparkles,
   Plug,
   Server,
+  History,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react"
 import {
   Tooltip,
@@ -16,7 +19,7 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
-import { selectedSidebarTabAtom, type SidebarTab } from "../../agents/atoms"
+import { selectedSidebarTabAtom, sidebarContentCollapsedAtom, type SidebarTab } from "../../agents/atoms"
 
 interface TabItem {
   id: SidebarTab
@@ -25,6 +28,7 @@ interface TabItem {
 }
 
 const tabs: TabItem[] = [
+  { id: "history", label: "History", icon: History },
   { id: "chats", label: "Workspaces", icon: MessageSquare },
   { id: "commands", label: "Commands", icon: Terminal },
   { id: "agents", label: "Agents", icon: Bot },
@@ -40,6 +44,18 @@ interface SidebarTabBarProps {
 
 export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarProps) {
   const [selectedTab, setSelectedTab] = useAtom(selectedSidebarTabAtom)
+  const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
+
+  const handleTabClick = (tabId: SidebarTab) => {
+    if (selectedTab === tabId) {
+      // Clicking same tab toggles collapse
+      setIsContentCollapsed(!isContentCollapsed)
+    } else {
+      // Clicking different tab switches and expands
+      setSelectedTab(tabId)
+      setIsContentCollapsed(false)
+    }
+  }
 
   return (
     <div
@@ -58,7 +74,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={() => setSelectedTab(tab.id)}
+                onClick={() => handleTabClick(tab.id)}
                 className={cn(
                   "flex items-center justify-center rounded-md transition-all duration-150 ease-out",
                   isCollapsed ? "h-8 w-8" : "h-7 w-7",
@@ -78,6 +94,32 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
           </Tooltip>
         )
       })}
+
+      {/* Spacer and collapse toggle */}
+      <div className="flex-1" />
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => setIsContentCollapsed(!isContentCollapsed)}
+            className={cn(
+              "flex items-center justify-center rounded-md transition-all duration-150 ease-out",
+              isCollapsed ? "h-8 w-8" : "h-7 w-7",
+              "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+            )}
+            aria-label={isContentCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isContentCollapsed ? (
+              <PanelLeft className={cn("flex-shrink-0", isCollapsed ? "h-4 w-4" : "h-3.5 w-3.5")} />
+            ) : (
+              <PanelLeftClose className={cn("flex-shrink-0", isCollapsed ? "h-4 w-4" : "h-3.5 w-3.5")} />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side={isCollapsed ? "right" : "bottom"}>
+          {isContentCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

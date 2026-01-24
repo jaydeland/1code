@@ -97,10 +97,12 @@ import {
   undoStackAtom,
   pendingUserQuestionsAtom,
   selectedSidebarTabAtom,
+  sidebarContentCollapsedAtom,
   type UndoItem,
 } from "../agents/atoms"
 import {
   SidebarTabBar,
+  HistoryTabContent,
   CommandsTabContent,
   AgentsTabContent,
   SkillsTabContent,
@@ -1396,6 +1398,7 @@ export function AgentsSidebar({
   const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
+  const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
@@ -2442,19 +2445,23 @@ export function AgentsSidebar({
       {/* Tab bar for switching between views */}
       <SidebarTabBar />
 
-      {/* Tab-specific content */}
-      {selectedSidebarTab === "commands" ? (
-        <CommandsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-      ) : selectedSidebarTab === "agents" ? (
-        <AgentsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-      ) : selectedSidebarTab === "skills" ? (
-        <SkillsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-      ) : selectedSidebarTab === "mcps" ? (
-        <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-      ) : selectedSidebarTab === "clusters" ? (
-        <ClustersTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
-      ) : (
+      {/* Tab-specific content - hide when collapsed */}
+      {!isContentCollapsed && (
         <>
+          {selectedSidebarTab === "history" ? (
+            <HistoryTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "commands" ? (
+            <CommandsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "agents" ? (
+            <AgentsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "skills" ? (
+            <SkillsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "mcps" ? (
+            <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "clusters" ? (
+            <ClustersTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : (
+            <>
       {/* Search and New Workspace */}
       <div className="px-2 pb-3 flex-shrink-0">
         <div className="space-y-2">
@@ -2686,6 +2693,8 @@ export function AgentsSidebar({
           className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none bg-gradient-to-t from-tl-background via-tl-background/50 to-transparent transition-opacity duration-200 opacity-0"
         />
       </div>
+            </>
+          )}
         </>
       )}
 

@@ -622,7 +622,7 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
  * - "skills": List of available skills
  * - "mcps": List of MCP servers
  */
-export type SidebarTab = "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters"
+export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters"
 
 /**
  * Currently selected sidebar tab (persisted)
@@ -631,6 +631,17 @@ export type SidebarTab = "chats" | "commands" | "agents" | "skills" | "mcps" | "
 export const selectedSidebarTabAtom = atomWithStorage<SidebarTab>(
   "agents:selectedSidebarTab",
   "chats",
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Sidebar content collapsed state (persisted)
+ * When collapsed, only the tab bar is shown, not the tab content
+ */
+export const sidebarContentCollapsedAtom = atomWithStorage<boolean>(
+  "agents:sidebarContentCollapsed",
+  false,
   undefined,
   { getOnInit: true },
 )
