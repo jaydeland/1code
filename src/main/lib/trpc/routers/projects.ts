@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { getDatabase, projects } from "../../db"
+import { getDatabase, projects, chats } from "../../db"
 import { eq, desc } from "drizzle-orm"
 import { dialog, BrowserWindow, app } from "electron"
 import { basename, join } from "path"
@@ -340,5 +340,71 @@ export const projectsRouter = router({
       })
 
       return newProject
+    }),
+
+  /**
+   * Get git status for a project (current branch, repo info)
+   * If chatId is provided, returns the branch from that chat's worktree
+   */
+  getGitStatus: publicProcedure
+    .input(z.object({
+      id: z.string(),
+      chatId: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = getDatabase()
+
+      // Get project
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, input.id))
+        .get()
+
+      if (!project) {
+        return null
+      }
+
+      let currentBranch: string | null = null
+      let workingPath = project.path
+
+      // If chatId provided, check if it has a worktree
+      if (input.chatId) {
+        const chat = db
+          .select()
+          .from(chats)
+          .where(eq(chats.id, input.chatId))
+          .get()
+
+        if (chat?.worktreePath && existsSync(chat.worktreePath)) {
+          // Use worktree path and branch
+          workingPath = chat.worktreePath
+          currentBranch = chat.branch
+        }
+      }
+
+      // Get current branch from git if not already set from chat
+      if (!currentBranch) {
+        try {
+          const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", {
+            cwd: workingPath,
+          })
+          currentBranch = stdout.trim()
+        } catch {
+          // Not a git repo or error getting branch
+        }
+      }
+
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        projectPath: project.path,
+        gitOwner: project.gitOwner,
+        gitRepo: project.gitRepo,
+        gitProvider: project.gitProvider,
+        gitRemoteUrl: project.gitRemoteUrl,
+        currentBranch,
+        isWorktree: workingPath !== project.path,
+      }
     }),
 })

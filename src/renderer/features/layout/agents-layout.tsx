@@ -19,12 +19,14 @@ import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
 import { AgentsSettingsDialog } from "../../components/dialogs/agents-settings-dialog"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
+import { TerminalDialog } from "../terminal"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { AgentsContent } from "../agents/ui/agents-content"
 import { ChatTabBar } from "../agents/ui/chat-tab-bar"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { AwsStatusBar } from "../../components/aws-status-bar"
+import { GitStatusBar } from "../../components/git-status-bar"
 import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../../lib/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
@@ -247,6 +249,7 @@ export function AgentsLayout() {
         onClose={() => setSettingsOpen(false)}
       />
       <ClaudeLoginModal />
+      <TerminalDialog />
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />
@@ -292,6 +295,9 @@ export function AgentsLayout() {
 
         {/* Update Banner */}
         <UpdateBanner />
+
+        {/* Git Status Bar (shows repository and branch info) */}
+        <GitStatusBar />
 
         {/* AWS Status Bar (shows when authenticated with AWS) */}
         <AwsStatusBar />

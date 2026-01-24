@@ -9,6 +9,14 @@ export const terminalSidebarOpenAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Terminal dialog open state (modal version, opened with Cmd+`)
+export const terminalDialogOpenAtom = atomWithStorage<boolean>(
+  "terminal-dialog-open",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
 export const terminalSidebarWidthAtom = atomWithStorage<number>(
   "terminal-sidebar-width",
   500,
@@ -46,3 +54,28 @@ export const terminalsAtom = atomWithStorage<
 export const activeTerminalIdAtom = atomWithStorage<
   Record<string, string | null>
 >("active-terminal-by-chat", {}, undefined, { getOnInit: true })
+
+// ============================================================================
+// Terminal Dialog State Management
+// ============================================================================
+
+/**
+ * Terminal instances for the dialog (global, not scoped to chat).
+ * The terminal dialog provides a quick-access terminal modal.
+ */
+export const dialogTerminalsAtom = atomWithStorage<TerminalInstance[]>(
+  "terminal-dialog-instances",
+  [],
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Active terminal id for the dialog.
+ */
+export const dialogActiveTerminalIdAtom = atomWithStorage<string | null>(
+  "terminal-dialog-active-id",
+  null,
+  undefined,
+  { getOnInit: true },
+)
