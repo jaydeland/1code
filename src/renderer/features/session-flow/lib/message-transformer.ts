@@ -64,9 +64,14 @@ function getFirstTextContent(parts: MessagePart[] | undefined): string {
  */
 function hasToolBranches(parts: MessagePart[] | undefined): boolean {
   if (!parts) return false
-  return parts.some(
-    (p) => p.type === "tool-invocation" && BRANCHING_TOOLS.has(p.toolName || ""),
-  )
+  return parts.some((p) => {
+    // New format: type is "tool-{toolName}" (e.g., "tool-Bash", "tool-Read")
+    if (p.type?.startsWith("tool-")) {
+      const toolName = p.type.replace("tool-", "")
+      return BRANCHING_TOOLS.has(toolName)
+    }
+    return false
+  })
 }
 
 /**
@@ -161,8 +166,9 @@ export function transformMessagesToFlow(
       for (let partIndex = 0; partIndex < parts.length; partIndex++) {
         const part = parts[partIndex]
 
-        if (part.type === "tool-invocation") {
-          const toolName = part.toolName || "Tool"
+        // New format: type is "tool-{toolName}" (e.g., "tool-Bash", "tool-Read")
+        if (part.type?.startsWith("tool-")) {
+          const toolName = part.type.replace("tool-", "")
 
           if (BRANCHING_TOOLS.has(toolName)) {
             const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`

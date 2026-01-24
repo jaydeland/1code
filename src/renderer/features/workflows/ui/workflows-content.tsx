@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { useAtomValue } from "jotai"
 import { workflowFileListWidthAtom, selectedWorkflowCategoryAtom } from "../atoms"
 import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
-import { WorkflowFileList } from "./workflow-file-list"
+import { WorkflowFlatFileList } from "./workflow-flat-file-list"
 import { WorkflowDetail } from "./workflow-detail"
 
 /**
@@ -35,7 +35,7 @@ export function WorkflowsContent() {
 
       {/* File List Sidebar */}
       <div className="w-[280px] border-r overflow-hidden bg-background flex-shrink-0">
-        <WorkflowFileList />
+        <WorkflowFlatFileList />
       </div>
 
       {/* Detail Panel */}

@@ -4,7 +4,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
-import { getDatabase, claudeCodeSettings } from "../../db"
+import { getDatabase, claudeCodeSettings, configSources } from "../../db"
 import { eq } from "drizzle-orm"
 
 // ============ TYPES ============
@@ -22,6 +22,7 @@ interface AgentMetadata {
   tools: string[]
   model: string
   sourcePath: string
+  source: "user" | "project" | "custom"
   validationErrors?: ValidationError[]
 }
 
@@ -31,6 +32,7 @@ interface CommandMetadata {
   description: string
   allowedTools: string[]
   sourcePath: string
+  source: "user" | "project" | "custom"
   validationErrors?: ValidationError[]
 }
 
@@ -39,6 +41,7 @@ interface SkillMetadata {
   name: string
   description: string
   sourcePath: string
+  source: "user" | "project" | "custom"
   validationErrors?: ValidationError[]
 }
 
@@ -123,6 +126,23 @@ async function getClaudeConfigDir(): Promise<string> {
 }
 
 /**
+ * Get custom plugin directories from database
+ * These directories contain agents/, skills/, commands/ subdirectories
+ */
+function getCustomPluginDirectories(): Array<{ path: string; priority: number }> {
+  const db = getDatabase()
+  const sources = db
+    .select()
+    .from(configSources)
+    .where(eq(configSources.type, "plugin"))
+    .orderBy(configSources.priority)
+    .all()
+    .filter((s) => s.enabled)
+
+  return sources.map((s) => ({ path: s.path, priority: s.priority }))
+}
+
+/**
  * Validate a path is within the allowed base directory (prevent path traversal)
  */
 function validatePath(baseDir: string, targetPath: string): boolean {
@@ -196,6 +216,7 @@ function parseAgentMd(content: string, filename: string): AgentMetadata {
       tools: Array.isArray(data.tools) ? (data.tools as string[]) : [],
       model: typeof data.model === "string" ? data.model : "",
       sourcePath: "", // Will be set by caller
+      source: "user", // Placeholder, will be set by caller
       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
     }
   } catch (err) {
@@ -215,6 +236,7 @@ function parseAgentMd(content: string, filename: string): AgentMetadata {
       tools: [],
       model: "",
       sourcePath: "",
+      source: "user", // Placeholder, will be set by caller
       validationErrors,
     }
   }
@@ -253,6 +275,7 @@ function parseCommandMd(content: string, filename: string): CommandMetadata {
       description: typeof data.description === "string" ? data.description : "",
       allowedTools,
       sourcePath: "", // Will be set by caller
+      source: "user", // Placeholder, will be set by caller
       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
     }
   } catch (err) {
@@ -270,6 +293,7 @@ function parseCommandMd(content: string, filename: string): CommandMetadata {
       description: "",
       allowedTools: [],
       sourcePath: "",
+      source: "user", // Placeholder, will be set by caller
       validationErrors,
     }
   }
@@ -298,6 +322,7 @@ function parseSkillMd(content: string, dirName: string): SkillMetadata {
       name: typeof data.name === "string" ? data.name : dirName,
       description: typeof data.description === "string" ? data.description : "",
       sourcePath: "", // Will be set by caller
+      source: "user", // Placeholder, will be set by caller
       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
     }
   } catch (err) {
@@ -314,6 +339,7 @@ function parseSkillMd(content: string, dirName: string): SkillMetadata {
       name: dirName,
       description: "",
       sourcePath: "",
+      source: "user", // Placeholder, will be set by caller
       validationErrors,
     }
   }
@@ -322,7 +348,7 @@ function parseSkillMd(content: string, dirName: string): SkillMetadata {
 /**
  * Scan agents directory for .md files
  */
-async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
+async function scanAgentsDir(baseDir: string, source: "user" | "project" | "custom"): Promise<AgentMetadata[]> {
   const agentsDir = path.join(baseDir, "agents")
   const agents: AgentMetadata[] = []
 
@@ -349,6 +375,7 @@ async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
       const content = await fs.readFile(filePath, "utf-8")
       const parsed = parseAgentMd(content, entry.name)
       parsed.sourcePath = filePath
+      parsed.source = source
       agents.push(parsed)
     } catch (err) {
       console.error(`[workflows] Failed to parse agent ${entry.name}:`, err instanceof Error ? err.message : err)
@@ -362,7 +389,7 @@ async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
 /**
  * Scan commands directory for .md files
  */
-async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
+async function scanCommandsDir(baseDir: string, source: "user" | "project" | "custom"): Promise<CommandMetadata[]> {
   const commandsDir = path.join(baseDir, "commands")
   const commands: CommandMetadata[] = []
 
@@ -389,6 +416,7 @@ async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
       const content = await fs.readFile(filePath, "utf-8")
       const parsed = parseCommandMd(content, entry.name)
       parsed.sourcePath = filePath
+      parsed.source = source
       commands.push(parsed)
     } catch (err) {
       console.error(`[workflows] Failed to parse command ${entry.name}:`, err instanceof Error ? err.message : err)
@@ -402,7 +430,7 @@ async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
 /**
  * Scan skills directory for SKILL.md files
  */
-async function scanSkillsDir(baseDir: string): Promise<SkillMetadata[]> {
+async function scanSkillsDir(baseDir: string, source: "user" | "project" | "custom"): Promise<SkillMetadata[]> {
   const skillsDir = path.join(baseDir, "skills")
   const skills: SkillMetadata[] = []
 
@@ -431,6 +459,7 @@ async function scanSkillsDir(baseDir: string): Promise<SkillMetadata[]> {
       const content = await fs.readFile(skillMdPath, "utf-8")
       const parsed = parseSkillMd(content, entry.name)
       parsed.sourcePath = skillMdPath
+      parsed.source = source
       skills.push(parsed)
     } catch {
       // SKILL.md doesn't exist, skip
@@ -1054,7 +1083,7 @@ export const workflowsRouter = router({
    */
   listAgents: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
-    return await scanAgentsDir(baseDir)
+    return await scanAgentsDir(baseDir, "user")
   }),
 
   /**
@@ -1063,7 +1092,7 @@ export const workflowsRouter = router({
    */
   listCommands: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
-    return await scanCommandsDir(baseDir)
+    return await scanCommandsDir(baseDir, "user")
   }),
 
   /**
@@ -1072,7 +1101,7 @@ export const workflowsRouter = router({
    */
   listSkills: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
-    return await scanSkillsDir(baseDir)
+    return await scanSkillsDir(baseDir, "user")
   }),
 
   /**
@@ -1098,13 +1127,91 @@ export const workflowsRouter = router({
    * Get the complete workflow dependency graph
    * Returns agents, commands, skills with agent and command dependencies categorized
    */
-  getWorkflowGraph: publicProcedure.query<WorkflowGraph>(async () => {
-    const baseDir = await getClaudeConfigDir()
+  getWorkflowGraph: publicProcedure
+    .input(
+      z
+        .object({
+          projectPath: z.string().optional(),
+        })
+        .optional()
+    )
+    .query<WorkflowGraph>(async ({ input }) => {
+    const userConfigDir = await getClaudeConfigDir()
 
-    // Scan all workflow items
-    const agents = await scanAgentsDir(baseDir)
-    const commands = await scanCommandsDir(baseDir)
-    const skills = await scanSkillsDir(baseDir)
+    // Get custom plugin directories
+    const customDirs = getCustomPluginDirectories()
+
+    // Scan all sources in parallel
+    const scanPromises: {
+      agents: Promise<AgentMetadata[]>[]
+      commands: Promise<CommandMetadata[]>[]
+      skills: Promise<SkillMetadata[]>[]
+    } = {
+      agents: [],
+      commands: [],
+      skills: [],
+    }
+
+    // Project source (if projectPath provided)
+    if (input?.projectPath) {
+      const projectConfigDir = path.join(input.projectPath, ".claude")
+      scanPromises.agents.push(scanAgentsDir(projectConfigDir, "project"))
+      scanPromises.commands.push(scanCommandsDir(projectConfigDir, "project"))
+      scanPromises.skills.push(scanSkillsDir(projectConfigDir, "project"))
+    }
+
+    // User source
+    scanPromises.agents.push(scanAgentsDir(userConfigDir, "user"))
+    scanPromises.commands.push(scanCommandsDir(userConfigDir, "user"))
+    scanPromises.skills.push(scanSkillsDir(userConfigDir, "user"))
+
+    // Custom sources (plugins)
+    for (const customDir of customDirs) {
+      scanPromises.agents.push(scanAgentsDir(customDir.path, "custom"))
+      scanPromises.commands.push(scanCommandsDir(customDir.path, "custom"))
+      scanPromises.skills.push(scanSkillsDir(customDir.path, "custom"))
+    }
+
+    // Wait for all scans
+    const [agentResults, commandResults, skillResults] = await Promise.all([
+      Promise.all(scanPromises.agents),
+      Promise.all(scanPromises.commands),
+      Promise.all(scanPromises.skills),
+    ])
+
+    // Flatten and deduplicate by ID (first source wins)
+    const seenAgentIds = new Set<string>()
+    const agents: AgentMetadata[] = []
+    for (const agentList of agentResults) {
+      for (const agent of agentList) {
+        if (!seenAgentIds.has(agent.id)) {
+          seenAgentIds.add(agent.id)
+          agents.push(agent)
+        }
+      }
+    }
+
+    const seenCommandIds = new Set<string>()
+    const commands: CommandMetadata[] = []
+    for (const commandList of commandResults) {
+      for (const command of commandList) {
+        if (!seenCommandIds.has(command.id)) {
+          seenCommandIds.add(command.id)
+          commands.push(command)
+        }
+      }
+    }
+
+    const seenSkillIds = new Set<string>()
+    const skills: SkillMetadata[] = []
+    for (const skillList of skillResults) {
+      for (const skill of skillList) {
+        if (!seenSkillIds.has(skill.id)) {
+          seenSkillIds.add(skill.id)
+          skills.push(skill)
+        }
+      }
+    }
 
     // Build ID sets for cross-referencing
     const allAgentIds = agents.map((a) => a.id)
