@@ -8,6 +8,7 @@ import {
   Bot,
   Sparkles,
   Plug,
+  Server,
 } from "lucide-react"
 import {
   Tooltip,
@@ -29,6 +30,7 @@ const tabs: TabItem[] = [
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: Sparkles },
   { id: "mcps", label: "MCPs", icon: Plug },
+  { id: "clusters", label: "Clusters", icon: Server },
 ]
 
 interface SidebarTabBarProps {

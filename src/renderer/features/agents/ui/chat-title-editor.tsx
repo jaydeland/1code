@@ -141,13 +141,13 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
     }
   }
 
-  // Fixed height to prevent layout shift when switching between view/edit modes
-  const heightClass = isMobile ? "h-7" : "h-7"
+  // Allow flexible height for multi-line titles (up to 2 lines)
+  const heightClass = isMobile ? "min-h-7" : "min-h-7"
 
   return (
     <div
       ref={containerRef}
-      className={cn("max-w-2xl mx-auto px-4", heightClass)}
+      className={cn("max-w-4xl mx-auto px-4", heightClass)}
     >
       {isEditing ? (
         <input
@@ -174,7 +174,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
             hasRealName ? "text-foreground cursor-pointer" : "cursor-default",
           )}
         >
-          <span className="block truncate">
+          <span className="block overflow-hidden text-ellipsis line-clamp-2">
             <TypewriterText
               text={name}
               placeholder={placeholder}

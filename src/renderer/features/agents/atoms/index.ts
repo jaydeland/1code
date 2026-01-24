@@ -622,7 +622,7 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
  * - "skills": List of available skills
  * - "mcps": List of MCP servers
  */
-export type SidebarTab = "chats" | "commands" | "agents" | "skills" | "mcps"
+export type SidebarTab = "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters"
 
 /**
  * Currently selected sidebar tab (persisted)

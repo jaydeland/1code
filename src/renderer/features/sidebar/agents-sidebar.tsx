@@ -105,6 +105,7 @@ import {
   AgentsTabContent,
   SkillsTabContent,
   McpsTabContent,
+  ClustersTabContent,
 } from "./components"
 import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
@@ -2450,6 +2451,8 @@ export function AgentsSidebar({
         <SkillsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
       ) : selectedSidebarTab === "mcps" ? (
         <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+      ) : selectedSidebarTab === "clusters" ? (
+        <ClustersTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
       ) : (
         <>
       {/* Search and New Workspace */}

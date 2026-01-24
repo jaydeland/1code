@@ -667,8 +667,8 @@ export function SubChatSelector({
                             ? "overflow-visible px-0"
                             : "overflow-hidden px-1.5 py-0.5 whitespace-nowrap min-w-[50px] gap-1.5",
                           isActive
-                            ? "bg-muted text-foreground max-w-[180px]"
-                            : "hover:bg-muted/80 max-w-[150px]",
+                            ? "bg-muted text-foreground max-w-[240px]"
+                            : "hover:bg-muted/80 max-w-[200px]",
                         )}
                       >
                         {/* Icon: question icon (priority) OR loading spinner OR mode icon with badge (hide when editing) */}
