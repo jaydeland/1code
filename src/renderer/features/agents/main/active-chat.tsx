@@ -1970,39 +1970,6 @@ const ChatViewInner = memo(function ChatViewInner({
     requestAnimationFrame(animateScroll)
   }, [])
 
-  // Scroll to a specific message (used by session flow panel)
-  const handleScrollToMessage = useCallback(
-    (messageId: string, _partIndex?: number) => {
-      const container = chatContainerRef.current
-      if (!container) return
-
-      // Find the message element
-      const selector = `[data-message-id="${messageId}"]`
-      const targetElement = container.querySelector(selector)
-
-      if (targetElement) {
-        // Check if this is inside a sticky user message container
-        const stickyParent = targetElement.closest("[data-user-message-id]")
-        if (stickyParent) {
-          const messageGroupWrapper = stickyParent.parentElement
-          if (messageGroupWrapper) {
-            messageGroupWrapper.scrollIntoView({
-              behavior: "smooth",
-              block: "start",
-            })
-            return
-          }
-        }
-
-        targetElement.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        })
-      }
-    },
-    [],
-  )
-
   // tRPC utils for cache invalidation
   const utils = api.useUtils()
 
@@ -4036,6 +4003,39 @@ export function ChatView({
   const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
 
+  // Scroll to a specific message (used by session flow panel)
+  const handleScrollToMessage = useCallback(
+    (messageId: string, _partIndex?: number) => {
+      // Find the active chat container (looks for the visible sub-chat container)
+      const container = document.querySelector('[data-chat-container]') as HTMLElement
+      if (!container) return
+
+      // Find the message element
+      const selector = `[data-message-id="${messageId}"]`
+      const targetElement = container.querySelector(selector)
+
+      if (targetElement) {
+        // Check if this is inside a sticky user message container
+        const stickyParent = targetElement.closest("[data-user-message-id]")
+        if (stickyParent) {
+          const messageGroupWrapper = stickyParent.parentElement
+          if (messageGroupWrapper) {
+            messageGroupWrapper.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            })
+            return
+          }
+        }
+
+        targetElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        })
+      }
+    },
+    [],
+  )
 
   // Force narrow width when switching to side-peek mode (from dialog/fullscreen)
   useEffect(() => {
