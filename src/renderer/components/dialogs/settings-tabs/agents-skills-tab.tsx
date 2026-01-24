@@ -31,6 +31,7 @@ export function AgentsSkillsTab() {
 
   const userSkills = skills.filter((s) => s.source === "user")
   const projectSkills = skills.filter((s) => s.source === "project")
+  const customSkills = skills.filter((s) => s.source === "custom")
 
   const handleExpandSkill = (skillName: string) => {
     setExpandedSkillName(expandedSkillName === skillName ? null : skillName)
@@ -111,6 +112,28 @@ export function AgentsSkillsTab() {
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
                     {projectSkills.map((skill) => (
+                      <SkillRow
+                        key={skill.name}
+                        skill={skill}
+                        isExpanded={expandedSkillName === skill.name}
+                        onToggle={() => handleExpandSkill(skill.name)}
+                        onOpenInFinder={() => handleOpenInFinder(skill.path)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Skills (from plugin directories) */}
+            {customSkills.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Custom Plugin Directories
+                </div>
+                <div className="bg-background rounded-lg border border-border overflow-hidden">
+                  <div className="divide-y divide-border">
+                    {customSkills.map((skill) => (
                       <SkillRow
                         key={skill.name}
                         skill={skill}

@@ -43,6 +43,7 @@ export function AgentsCustomAgentsTab() {
 
   const userAgents = agents.filter((a) => a.source === "user")
   const projectAgents = agents.filter((a) => a.source === "project")
+  const customAgents = agents.filter((a) => a.source === "custom")
 
   const handleExpandAgent = (agentName: string) => {
     setExpandedAgentName(expandedAgentName === agentName ? null : agentName)
@@ -123,6 +124,28 @@ export function AgentsCustomAgentsTab() {
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
                     {projectAgents.map((agent) => (
+                      <AgentRow
+                        key={agent.name}
+                        agent={agent}
+                        isExpanded={expandedAgentName === agent.name}
+                        onToggle={() => handleExpandAgent(agent.name)}
+                        onOpenInFinder={() => handleOpenInFinder(agent.path)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Agents (from plugin directories) */}
+            {customAgents.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Custom Plugin Directories
+                </div>
+                <div className="bg-background rounded-lg border border-border overflow-hidden">
+                  <div className="divide-y divide-border">
+                    {customAgents.map((agent) => (
                       <AgentRow
                         key={agent.name}
                         agent={agent}

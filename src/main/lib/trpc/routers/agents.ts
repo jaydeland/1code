@@ -3,6 +3,8 @@ import { router, publicProcedure } from "../index"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
+import { eq } from "drizzle-orm"
+import { getDatabase, configSources } from "../../db"
 import {
   parseAgentMd,
   generateAgentMd,
@@ -12,7 +14,7 @@ import {
 } from "./agent-utils"
 
 /**
- * Get directories to scan for agents
+ * Get directories to scan for agents (built-in locations)
  */
 function getScanLocations(type: string, cwd?: string) {
   const homeDir = os.homedir()
@@ -20,6 +22,23 @@ function getScanLocations(type: string, cwd?: string) {
   const projectDir = cwd ? path.join(cwd, ".claude", type) : null
 
   return { userDir, projectDir }
+}
+
+/**
+ * Get custom plugin directories from database
+ * These directories contain agents/, skills/, commands/ subdirectories
+ */
+function getCustomPluginDirectories(): Array<{ path: string; priority: number }> {
+  const db = getDatabase()
+  const sources = db
+    .select()
+    .from(configSources)
+    .where(eq(configSources.type, "plugin"))
+    .orderBy(configSources.priority)
+    .all()
+    .filter((s) => s.enabled)
+
+  return sources.map((s) => ({ path: s.path, priority: s.priority }))
 }
 
 // Shared procedure for listing agents
@@ -34,16 +53,42 @@ const listAgentsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("agents", input?.cwd)
 
-    // Scan directories in parallel
-    const [userAgents, projectAgents] = await Promise.all([
-      scanAgentsDirectory(locations.userDir, "user"),
-      locations.projectDir
-        ? scanAgentsDirectory(locations.projectDir, "project")
-        : Promise.resolve<FileAgent[]>([]),
-    ])
+    // Get custom plugin directories from database
+    const customDirs = getCustomPluginDirectories()
 
-    // Return all agents, priority: project > user
-    return [...projectAgents, ...userAgents]
+    // Scan all directories in parallel
+    const scanPromises: Promise<FileAgent[]>[] = []
+
+    // Project agents (highest priority)
+    if (locations.projectDir) {
+      scanPromises.push(scanAgentsDirectory(locations.projectDir, "project"))
+    }
+
+    // User agents
+    scanPromises.push(scanAgentsDirectory(locations.userDir, "user"))
+
+    // Custom plugin directories (scan agents/ subdirectory)
+    for (const customDir of customDirs) {
+      const agentsDir = path.join(customDir.path, "agents")
+      scanPromises.push(scanAgentsDirectory(agentsDir, "custom"))
+    }
+
+    const results = await Promise.all(scanPromises)
+
+    // Flatten results and deduplicate by name (first source wins)
+    const seenNames = new Set<string>()
+    const agents: FileAgent[] = []
+
+    for (const agentList of results) {
+      for (const agent of agentList) {
+        if (!seenNames.has(agent.name)) {
+          seenNames.add(agent.name)
+          agents.push(agent)
+        }
+      }
+    }
+
+    return agents
   })
 
 export const agentsRouter = router({

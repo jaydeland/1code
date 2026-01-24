@@ -4,9 +4,11 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { eq } from "drizzle-orm"
+import { getDatabase, configSources } from "../../db"
 
 /**
- * Get directories to scan for skills
+ * Get directories to scan for skills (built-in locations)
  */
 function getScanLocations(type: string, cwd?: string) {
   const homeDir = os.homedir()
@@ -14,6 +16,23 @@ function getScanLocations(type: string, cwd?: string) {
   const projectDir = cwd ? path.join(cwd, ".claude", type) : null
 
   return { userDir, projectDir }
+}
+
+/**
+ * Get custom plugin directories from database
+ * These directories contain agents/, skills/, commands/ subdirectories
+ */
+function getCustomPluginDirectories(): Array<{ path: string; priority: number }> {
+  const db = getDatabase()
+  const sources = db
+    .select()
+    .from(configSources)
+    .where(eq(configSources.type, "plugin"))
+    .orderBy(configSources.priority)
+    .all()
+    .filter((s) => s.enabled)
+
+  return sources.map((s) => ({ path: s.path, priority: s.priority }))
 }
 
 interface FileSkill {
@@ -103,16 +122,42 @@ const listSkillsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("skills", input?.cwd)
 
-    // Scan directories in parallel
-    const [userSkills, projectSkills] = await Promise.all([
-      scanSkillsDirectory(locations.userDir, "user"),
-      locations.projectDir
-        ? scanSkillsDirectory(locations.projectDir, "project")
-        : Promise.resolve<FileSkill[]>([]),
-    ])
+    // Get custom plugin directories from database
+    const customDirs = getCustomPluginDirectories()
 
-    // Return all skills, priority: project > user
-    return [...projectSkills, ...userSkills]
+    // Scan all directories in parallel
+    const scanPromises: Promise<FileSkill[]>[] = []
+
+    // Project skills (highest priority)
+    if (locations.projectDir) {
+      scanPromises.push(scanSkillsDirectory(locations.projectDir, "project"))
+    }
+
+    // User skills
+    scanPromises.push(scanSkillsDirectory(locations.userDir, "user"))
+
+    // Custom plugin directories (scan skills/ subdirectory)
+    for (const customDir of customDirs) {
+      const skillsDir = path.join(customDir.path, "skills")
+      scanPromises.push(scanSkillsDirectory(skillsDir, "custom"))
+    }
+
+    const results = await Promise.all(scanPromises)
+
+    // Flatten results and deduplicate by name (first source wins)
+    const seenNames = new Set<string>()
+    const skills: FileSkill[] = []
+
+    for (const skillList of results) {
+      for (const skill of skillList) {
+        if (!seenNames.has(skill.name)) {
+          seenNames.add(skill.name)
+          skills.push(skill)
+        }
+      }
+    }
+
+    return skills
   })
 
 export const skillsRouter = router({

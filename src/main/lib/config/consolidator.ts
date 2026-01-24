@@ -6,6 +6,8 @@ import * as fs from "fs/promises"
 import { existsSync, statSync } from "fs"
 import path from "path"
 import * as os from "os"
+import { eq } from "drizzle-orm"
+import { getDatabase, configSources } from "../db"
 import type {
   ConfigSource,
   McpConfigFile,
@@ -14,6 +16,32 @@ import type {
   ConsolidatedConfig,
   McpServerConfig,
 } from "./types"
+
+/**
+ * Get custom MCP config paths from database
+ */
+function getCustomMcpConfigsFromDb(): ConfigSource[] {
+  try {
+    const db = getDatabase()
+    const customSources = db
+      .select()
+      .from(configSources)
+      .where(eq(configSources.type, "mcp"))
+      .orderBy(configSources.priority)
+      .all()
+      .filter((s) => s.enabled)
+
+    return customSources.map((source) => ({
+      type: "custom" as const,
+      path: source.path,
+      priority: source.priority,
+      exists: existsSync(source.path),
+    }))
+  } catch (error) {
+    console.error("[config] Failed to get custom MCP configs from database:", error)
+    return []
+  }
+}
 
 /**
  * Get all MCP config paths in priority order
@@ -45,9 +73,9 @@ export function getMcpConfigPaths(projectPath?: string): ConfigSource[] {
     exists: existsSync(userConfigPath),
   })
 
-  // TODO: Add custom configs from database (Step 3)
-  // const customConfigs = await getCustomMcpConfigs()
-  // sources.push(...customConfigs)
+  // 3. Custom configs from database
+  const customConfigs = getCustomMcpConfigsFromDb()
+  sources.push(...customConfigs)
 
   // Sort by priority (lower = higher priority)
   sources.sort((a, b) => a.priority - b.priority)
