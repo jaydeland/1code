@@ -645,3 +645,31 @@ export const sidebarContentCollapsedAtom = atomWithStorage<boolean>(
   undefined,
   { getOnInit: true },
 )
+
+/**
+ * Expanded workspace IDs in tree view (persisted)
+ * Tracks which workspaces are expanded to show their nested chats
+ */
+export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
+  "agents:expandedWorkspaceIds",
+  new Set(),
+  {
+    getItem: (key, initialValue) => {
+      const stored = localStorage.getItem(key)
+      if (!stored) return initialValue
+      try {
+        const arr = JSON.parse(stored) as string[]
+        return new Set(arr)
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(Array.from(value)))
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
+  { getOnInit: true },
+)
