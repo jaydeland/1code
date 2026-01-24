@@ -36,7 +36,9 @@ import {
   SkillsTabContent,
   McpsTabContent,
   ClustersTabContent,
+  TerminalTabContent,
 } from "../sidebar/components"
+import { RightIconBar } from "./right-icon-bar"
 import { Button } from "../../components/ui/button"
 import { SettingsIcon } from "../../components/ui/icons"
 import {
@@ -268,6 +270,8 @@ export function AgentsLayout() {
                 <HistoryTabContent className="h-full" />
               ) : selectedSidebarTab === "chats" ? (
                 <WorkspacesTabContent className="h-full" />
+              ) : selectedSidebarTab === "terminal" ? (
+                <TerminalTabContent className="h-full" />
               ) : selectedSidebarTab === "commands" ? (
                 <CommandsTabContent className="h-full" />
               ) : selectedSidebarTab === "agents" ? (
@@ -286,6 +290,13 @@ export function AgentsLayout() {
           <div className="flex-1 overflow-hidden flex flex-col min-w-0">
             <AgentsContent />
           </div>
+
+          {/* Right Icon Bar (desktop only) */}
+          {!isMobile && (
+            <div className="flex-shrink-0 bg-background">
+              <RightIconBar />
+            </div>
+          )}
         </div>
 
         {/* Update Banner */}

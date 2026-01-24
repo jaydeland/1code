@@ -166,8 +166,6 @@ interface SubChatSelectorProps {
   canOpenPreview?: boolean
   onOpenDiff?: () => void
   canOpenDiff?: boolean
-  isDiffSidebarOpen?: boolean
-  diffStats?: DiffStats
 }
 
 export function SubChatSelector({
@@ -178,8 +176,6 @@ export function SubChatSelector({
   canOpenPreview = false,
   onOpenDiff,
   canOpenDiff = false,
-  isDiffSidebarOpen = false,
-  diffStats,
 }: SubChatSelectorProps) {
   // Use shallow comparison to prevent re-renders when arrays have same content
   const { activeSubChatId, openSubChatIds, pinnedSubChatIds, allSubChats, parentChatId, togglePinSubChat } = useAgentSubChatStore(
@@ -851,48 +847,7 @@ export function SubChatSelector({
         </div>
       )}
 
-      {/* Diff button - always visible on desktop when sandbox exists */}
-      {!isMobile && canOpenDiff && (
-        <div
-          className="rounded-md bg-background/10 backdrop-blur-[10px] flex items-center justify-center"
-          style={{
-            // @ts-expect-error - WebKit-specific property
-            WebkitAppRegion: "no-drag",
-          }}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenDiff?.()}
-                className="h-6 w-6 p-0 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center hover:bg-foreground/10"
-              >
-                {diffStats?.isLoading ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  <DiffIcon className="h-4 w-4" />
-                )}
-                <span className="sr-only">Open diff</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {diffStats?.isLoading ? (
-                "Loading changes..."
-              ) : diffStats?.hasChanges ? (
-                <>
-                  <span>View changes</span>
-                  <Kbd>⌘D</Kbd>
-                </>
-              ) : (
-                "No changes"
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      )}
-
-      {/* Diff button - only on mobile when diff is available */}
+      {/* Diff button - only on mobile when diff is available (desktop uses RightIconBar) */}
       {isMobile && onOpenDiff && canOpenDiff && (
         <div
           className="rounded-md bg-background/10 backdrop-blur-[10px] flex items-center justify-center"

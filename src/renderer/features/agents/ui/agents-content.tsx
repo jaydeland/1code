@@ -895,9 +895,6 @@ export function AgentsContent() {
                 <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
               </div>
             )
-          ) : selectedSidebarTab === "commands" ? (
-            // Commands tab - show command detail or placeholder
-            <CommandDetail />
           ) : (
             // For other tabs, show a placeholder detail view
             <div className="h-full flex items-center justify-center">

@@ -5,6 +5,7 @@ import { useAtom } from "jotai"
 import {
   MessageSquare,
   Terminal,
+  TerminalSquare,
   Bot,
   Sparkles,
   Plug,
@@ -31,6 +32,7 @@ interface TabItem {
 const tabs: TabItem[] = [
   { id: "history", label: "History", icon: History },
   { id: "chats", label: "Workspaces", icon: FolderOpen },
+  { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "commands", label: "Commands", icon: Terminal },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: Sparkles },

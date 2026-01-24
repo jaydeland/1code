@@ -633,8 +633,9 @@ export const selectedCommandAtom = atom<string | null>(null)
  * - "agents": List of available agents
  * - "skills": List of available skills
  * - "mcps": List of MCP servers
+ * - "terminal": Terminal sessions list
  */
-export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters"
+export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal"
 
 /**
  * Currently selected sidebar tab (persisted)
