@@ -66,12 +66,11 @@ export function TerminalDialog() {
   const terminalCwds = useAtomValue(terminalCwdAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
 
-  // Get cwd from selected project or home directory
+  // Get cwd from selected project
   const cwd = useMemo(() => {
-    // In Electron renderer, process.env.HOME should be available
-    // On Windows, use USERPROFILE if HOME is not set
-    const homeDir = process.env.HOME || process.env.USERPROFILE || "/"
-    return selectedProject?.path || homeDir
+    // Use selected project path, fallback to home directory placeholder
+    // The actual home directory will be resolved by the terminal backend
+    return selectedProject?.path || "~"
   }, [selectedProject])
 
   // Portal target
