@@ -15,8 +15,7 @@ import {
   agentsMobileViewModeAtom,
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
-  agentsSubChatsSidebarModeAtom,
-  agentsSubChatsSidebarWidthAtom,
+  selectedSidebarTabAtom,
 } from "../atoms"
 import {
   selectedTeamIdAtom,
@@ -32,7 +31,6 @@ import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
 import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
-import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
 import { AgentPreview } from "./agent-preview"
 import { AgentDiffView } from "./agent-diff-view"
 import { TerminalSidebar, terminalSidebarOpenAtom } from "../../terminal"
@@ -41,29 +39,24 @@ import {
   type SubChatMeta,
 } from "../stores/sub-chat-store"
 import { useShallow } from "zustand/react/shallow"
-import { motion, AnimatePresence } from "motion/react"
-// import { ResizableSidebar } from "@/app/(alpha)/canvas/[id]/{components}/resizable-sidebar"
-import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 // import { useClerk, useUser } from "@clerk/nextjs"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null }) // Desktop mock
-import { Button } from "../../../components/ui/button"
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { WorkflowsContent } from "../../workflows/ui/workflows-content"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { McpContent } from "../../mcp/ui/mcp-content"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { ClustersContent } from "../../clusters/ui/clusters-content"
-import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
-import { isDesktopApp } from "../../../lib/utils/platform"
 // Desktop mock
 const useIsAdmin = () => false
 
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+  const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
@@ -81,15 +74,8 @@ export function AgentsContent() {
     agentsPreviewSidebarOpenAtom,
   )
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
-  const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
-    agentsSubChatsSidebarModeAtom,
-  )
   const setTerminalSidebarOpen = useSetAtom(terminalSidebarOpenAtom)
 
-  const hasOpenedSubChatsSidebar = useRef(false)
-  const wasSubChatsSidebarOpen = useRef(false)
-  const [shouldAnimateSubChatsSidebar, setShouldAnimateSubChatsSidebar] =
-    useState(subChatsSidebarMode !== "sidebar")
   const searchParams = useSearchParams()
   const router = useRouter()
   const isInitialized = useRef(false)
@@ -721,42 +707,6 @@ export function AgentsContent() {
     }
   }
 
-  // Check if sub-chats data is loaded (use separate selectors to avoid object creation)
-  const subChatsStoreChatId = useAgentSubChatStore((state) => state.chatId)
-  const subChatsCount = useAgentSubChatStore(
-    (state) => state.allSubChats.length,
-  )
-
-  // Check if sub-chats are still loading (store not yet initialized for this chat)
-  const isLoadingSubChats =
-    selectedChatId !== null &&
-    (subChatsStoreChatId !== selectedChatId || subChatsCount === 0)
-
-  // Track sub-chats sidebar open state for animation control
-  // Now renders even while loading to show spinner (mobile always uses tabs)
-  const isSubChatsSidebarOpen =
-    selectedChatId && subChatsSidebarMode === "sidebar" && !isMobile
-
-  useEffect(() => {
-    // When sidebar closes, reset for animation on next open
-    if (!isSubChatsSidebarOpen && wasSubChatsSidebarOpen.current) {
-      hasOpenedSubChatsSidebar.current = false
-      setShouldAnimateSubChatsSidebar(true)
-    }
-    wasSubChatsSidebarOpen.current = !!isSubChatsSidebarOpen
-
-    // Mark as opened after animation completes
-    if (isSubChatsSidebarOpen && !hasOpenedSubChatsSidebar.current) {
-      const timer = setTimeout(() => {
-        hasOpenedSubChatsSidebar.current = true
-        setShouldAnimateSubChatsSidebar(false)
-      }, 150 + 50) // 150ms duration + 50ms buffer
-      return () => clearTimeout(timer)
-    } else if (isSubChatsSidebarOpen && hasOpenedSubChatsSidebar.current) {
-      setShouldAnimateSubChatsSidebar(false)
-    }
-  }, [isSubChatsSidebarOpen])
-
   // Check if chat has sandbox with port for preview
   const chatMeta = chatData?.meta as
     | {
@@ -897,53 +847,37 @@ export function AgentsContent() {
   return (
     <>
       <div className="flex h-full">
-        {/* Sub-chats sidebar - only show in sidebar mode when viewing a chat */}
-        <ResizableSidebar
-          isOpen={!!isSubChatsSidebarOpen}
-          onClose={() => {
-            setShouldAnimateSubChatsSidebar(true)
-            setSubChatsSidebarMode("tabs")
-          }}
-          widthAtom={agentsSubChatsSidebarWidthAtom}
-          minWidth={160}
-          maxWidth={300}
-          side="left"
-          animationDuration={0}
-          initialWidth={0}
-          exitWidth={0}
-          disableClickToClose={true}
-        >
-          <AgentsSubChatsSidebar
-            onClose={() => {
-              setShouldAnimateSubChatsSidebar(true)
-              setSubChatsSidebarMode("tabs")
-            }}
-            isMobile={isMobile}
-            isSidebarOpen={sidebarOpen}
-            onBackToChats={() => setSidebarOpen((prev) => !prev)}
-            isLoading={isLoadingSubChats}
-            agentName={chatData?.name}
-          />
-        </ResizableSidebar>
-
-        {/* Main content */}
+        {/* Main content area */}
         <div
           className="flex-1 min-w-0 overflow-hidden"
           style={{ minWidth: "350px" }}
         >
-          {selectedChatId ? (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <ChatView
-                chatId={selectedChatId}
-                isSidebarOpen={sidebarOpen}
-                onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-                selectedTeamName={selectedTeam?.name}
-                selectedTeamImageUrl={selectedTeam?.image_url}
-              />
-            </div>
+          {/* Show appropriate content based on selected sidebar tab */}
+          {selectedSidebarTab === "chats" ? (
+            // Workspaces tab - show chat view
+            selectedChatId ? (
+              <div className="h-full flex flex-col relative overflow-hidden">
+                <ChatView
+                  chatId={selectedChatId}
+                  isSidebarOpen={sidebarOpen}
+                  onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+                  selectedTeamName={selectedTeam?.name}
+                  selectedTeamImageUrl={selectedTeam?.image_url}
+                />
+              </div>
+            ) : (
+              <div className="h-full flex flex-col relative overflow-hidden">
+                <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
+              </div>
+            )
           ) : (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
+            // For other tabs, show a placeholder detail view
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <p className="text-sm">
+                  Select an item from the {selectedSidebarTab} list to view details
+                </p>
+              </div>
             </div>
           )}
         </div>

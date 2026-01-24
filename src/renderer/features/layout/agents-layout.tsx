@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { isDesktopApp } from "../../lib/utils/platform"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
 
 import {
   agentsSidebarOpenAtom,
-  agentsSidebarWidthAtom,
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   isDesktopAtom,
   isFullscreenAtom,
-  anthropicOnboardingCompletedAtom,
   customHotkeysAtom,
 } from "../../lib/atoms"
 import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom, sidebarContentCollapsedAtom } from "../agents/atoms"
@@ -22,7 +20,6 @@ import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
 import { TerminalDialog } from "../terminal"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { AgentsContent } from "../agents/ui/agents-content"
-import { ChatTabBar } from "../agents/ui/chat-tab-bar"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { AwsStatusBar } from "../../components/aws-status-bar"
@@ -40,13 +37,13 @@ import {
   McpsTabContent,
   ClustersTabContent,
 } from "../sidebar/components"
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-// Sidebar constants kept for potential future use
-const SIDEBAR_CLOSE_HOTKEY = "⌘\\"
+import { Button } from "../../components/ui/button"
+import { SettingsIcon } from "../../components/ui/icons"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../../components/ui/tooltip"
 
 // ============================================================================
 // Component
@@ -94,17 +91,13 @@ export function AgentsLayout() {
   // Check for updates on mount and periodically
   useUpdateChecker()
 
-  const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
-  const [sidebarWidth, setSidebarWidth] = useAtom(agentsSidebarWidthAtom)
+  const setSidebarOpen = useSetAtom(agentsSidebarOpenAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom
-  )
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
@@ -154,26 +147,6 @@ export function AgentsLayout() {
   }, [isDesktop])
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
 
-  // Desktop user state
-  const [desktopUser, setDesktopUser] = useState<{
-    id: string
-    email: string
-    name: string | null
-    imageUrl: string | null
-    username: string | null
-  } | null>(null)
-
-  // Fetch desktop user on mount
-  useEffect(() => {
-    async function fetchUser() {
-      if (window.desktopApi?.getUser) {
-        const user = await window.desktopApi.getUser()
-        setDesktopUser(user)
-      }
-    }
-    fetchUser()
-  }, [])
-
   // Track if this is the initial load - skip auto-open on first load to respect saved state
   const isInitialLoadRef = useRef(true)
 
@@ -195,17 +168,6 @@ export function AgentsLayout() {
       setSidebarOpen(false)
     }
   }, [validatedProject, projects, setSidebarOpen])
-
-  // Handle sign out
-  const handleSignOut = useCallback(async () => {
-    // Clear selected project and anthropic onboarding on logout
-    setSelectedProject(null)
-    setSelectedChatId(null)
-    setAnthropicOnboardingCompleted(false)
-    if (window.desktopApi?.logout) {
-      await window.desktopApi.logout()
-    }
-  }, [setSelectedProject, setSelectedChatId, setAnthropicOnboardingCompleted])
 
   // Initialize sub-chats when chat is selected
   useEffect(() => {
@@ -233,24 +195,6 @@ export function AgentsLayout() {
     customHotkeysConfig,
   })
 
-  const handleCloseSidebar = useCallback(() => {
-    setSidebarOpen(false)
-  }, [setSidebarOpen])
-
-  // Handle new chat from tab bar
-  const handleNewChat = useCallback(() => {
-    setSelectedChatId(null)
-  }, [setSelectedChatId])
-
-  // Handle open settings from tab bar
-  const handleOpenSettings = useCallback(() => {
-    setSettingsActiveTab("profile")
-    setSettingsOpen(true)
-  }, [setSettingsActiveTab, setSettingsOpen])
-
-  // Track hover state for traffic lights
-  const [isTabBarHovered, setIsTabBarHovered] = useState(false)
-
   return (
     <TooltipProvider delayDuration={300}>
       {/* Global queue processor - handles message queues for all sub-chats */}
@@ -265,36 +209,45 @@ export function AgentsLayout() {
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />
 
-        {/* Tab Bar Header with Traffic Lights */}
-        {!isMobile && (
+        {/* Header - traffic lights and settings */}
+        {!isMobile && isDesktop && (
           <div
-            className="flex items-center border-b border-border/50 bg-background flex-shrink-0"
-            onMouseEnter={() => setIsTabBarHovered(true)}
-            onMouseLeave={() => setIsTabBarHovered(false)}
+            className="flex items-center justify-between h-8 pl-2 pr-2 border-b border-border/50 bg-background flex-shrink-0"
+            style={{
+              // @ts-expect-error - WebKit-specific property
+              WebkitAppRegion: "drag",
+            }}
           >
-            {/* Traffic lights area - draggable for window movement */}
-            {isDesktop && (
-              <div
-                className="flex items-center h-10 pl-2 pr-1 flex-shrink-0"
-                style={{
-                  // @ts-expect-error - WebKit-specific property
-                  WebkitAppRegion: "drag",
-                }}
-              >
-                <TrafficLights
-                  isHovered={isTabBarHovered}
-                  isFullscreen={isFullscreen}
-                  isDesktop={isDesktop}
-                  className="flex-shrink-0"
-                />
-              </div>
-            )}
-            {/* Tab bar takes remaining space */}
-            <div className="flex-1 min-w-0">
-              <ChatTabBar
-                onNewChat={handleNewChat}
-                onOpenSettings={handleOpenSettings}
-              />
+            <TrafficLights
+              isHovered={false}
+              isFullscreen={isFullscreen}
+              isDesktop={isDesktop}
+              className="flex-shrink-0"
+            />
+
+            {/* Settings button */}
+            <div
+              style={{
+                // @ts-expect-error - WebKit-specific property
+                WebkitAppRegion: "no-drag",
+              }}
+            >
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setSettingsActiveTab("profile")
+                      setSettingsOpen(true)
+                    }}
+                    className="h-6 w-6"
+                  >
+                    <SettingsIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Settings</TooltipContent>
+              </Tooltip>
             </div>
           </div>
         )}
@@ -308,7 +261,7 @@ export function AgentsLayout() {
             </div>
           )}
 
-          {/* Sidebar Content Panel - shows content for selected tab */}
+          {/* Sidebar Content Panel - shows list/navigation for selected tab */}
           {!isMobile && !isContentCollapsed && (
             <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background overflow-hidden">
               {selectedSidebarTab === "history" ? (

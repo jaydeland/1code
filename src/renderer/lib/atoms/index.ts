@@ -24,7 +24,9 @@ export {
   // Sidebar atoms
   agentsSidebarOpenAtom,
   agentsSidebarWidthAtom,
+  // DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
   agentsSubChatsSidebarModeAtom,
+  // DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
   agentsSubChatsSidebarWidthAtom,
   selectedSidebarTabAtom,
   type SidebarTab,

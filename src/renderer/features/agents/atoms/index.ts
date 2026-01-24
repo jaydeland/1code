@@ -343,11 +343,13 @@ export const diffFilesCollapsedAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
+// DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
 // Sub-chats display mode - tabs (horizontal) or sidebar (vertical list)
 export const agentsSubChatsSidebarModeAtom = atomWithStorage<
   "tabs" | "sidebar"
 >("agents-subchats-mode", "tabs", undefined, { getOnInit: true })
 
+// DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
 // Sub-chats sidebar width (left side of chat area)
 export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
   "agents-subchats-sidebar-width",
