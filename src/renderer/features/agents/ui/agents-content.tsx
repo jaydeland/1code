@@ -48,12 +48,6 @@ import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { McpContent } from "../../mcp/ui/mcp-content"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { ClustersContent } from "../../clusters/ui/clusters-content"
-import { selectedSkillCategoryAtom } from "../../skills/atoms"
-import { SkillsContent } from "../../skills/ui/skills-content"
-import { selectedCommandCategoryAtom } from "../../commands/atoms"
-import { CommandsContent } from "../../commands/ui/commands-content"
-import { selectedAgentDefCategoryAtom } from "../../agents-defs/atoms"
-import { AgentsDefsContent } from "../../agents-defs/ui/agents-defs-content"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 // Desktop mock
@@ -66,17 +60,6 @@ export function AgentsContent() {
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
-  const selectedSkillCategory = useAtomValue(selectedSkillCategoryAtom)
-  const selectedCommandCategory = useAtomValue(selectedCommandCategoryAtom)
-  const selectedAgentDefCategory = useAtomValue(selectedAgentDefCategoryAtom)
-
-  // Debug logging
-  useEffect(() => {
-    console.log("[agents-content] selectedChatId:", selectedChatId)
-    console.log("[agents-content] selectedWorkflowCategory:", selectedWorkflowCategory)
-    console.log("[agents-content] selectedAgentDefCategory:", selectedAgentDefCategory)
-    console.log("[agents-content] Should show workflows?", selectedWorkflowCategory && !selectedChatId)
-  }, [selectedChatId, selectedWorkflowCategory, selectedAgentDefCategory])
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
@@ -844,29 +827,15 @@ export function AgentsContent() {
     return <ClustersContent />
   }
 
-  // If Skills category is selected, show skills view
-  if (selectedSkillCategory === "skills") {
-    return <SkillsContent />
-  }
-
-  // If MCP category is selected, show MCP servers view (takes priority over chat)
+  // If MCP category is selected, show MCP servers view
   if (selectedMcpCategory === "mcp") {
     return <McpContent />
   }
 
-  // If workflow category is selected, show workflow browser (takes priority over chat)
+  // If workflow category is selected, show workflow browser
+  // This handles commands, agents, and skills categories
   if (selectedWorkflowCategory) {
     return <WorkflowsContent />
-  }
-
-  // If command category is selected, show commands browser
-  if (selectedCommandCategory === "commands") {
-    return <CommandsContent />
-  }
-
-  // If agents definition category is selected, show agents browser
-  if (selectedAgentDefCategory === "agents") {
-    return <AgentsDefsContent />
   }
 
   return (

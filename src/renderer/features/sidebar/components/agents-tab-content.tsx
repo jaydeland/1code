@@ -7,11 +7,7 @@ import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { useAtomValue, useSetAtom } from "jotai"
-import {
-  selectedAgentDefCategoryAtom,
-  selectedAgentDefAtom,
-  type SelectedAgentDef,
-} from "../../agents-defs/atoms"
+import { selectedWorkflowCategoryAtom, selectedWorkflowNodeAtom } from "../../workflows/atoms"
 
 interface AgentsTabContentProps {
   className?: string
@@ -43,15 +39,15 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const setSelectedAgentDefCategory = useSetAtom(selectedAgentDefCategoryAtom)
-  const setSelectedAgentDef = useSetAtom(selectedAgentDefAtom)
+  const setSelectedWorkflowNode = useSetAtom(selectedWorkflowNodeAtom)
+  const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
 
   // Fetch agents using tRPC
   const { data: agents, isLoading } = trpc.agents.list.useQuery({
     cwd: selectedProject?.path,
   })
 
-  // Handle agent click - sets the category and selected agent
+  // Handle agent click - switches to workflows view with agent selected
   const handleAgentClick = (agent: {
     name: string
     path: string
@@ -59,14 +55,15 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
     description?: string
     model?: string
   }) => {
-    setSelectedAgentDefCategory("agents")
-    setSelectedAgentDef({
+    // Set the selected workflow node
+    setSelectedWorkflowNode({
+      id: agent.name,
       name: agent.name,
-      path: agent.path,
-      source: agent.source,
-      description: agent.description,
-      model: agent.model,
+      type: "agent",
+      sourcePath: agent.path,
     })
+    // Switch to workflows view with agents category
+    setWorkflowCategory("agents")
   }
 
   // Filter agents by search query

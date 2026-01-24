@@ -6,7 +6,7 @@ import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
-import { selectedSkillCategoryAtom, selectedSkillAtom } from "../../skills/atoms"
+import { selectedWorkflowCategoryAtom, selectedWorkflowNodeAtom } from "../../workflows/atoms"
 import { useAtomValue, useSetAtom } from "jotai"
 
 interface SkillsTabContentProps {
@@ -39,8 +39,8 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const setSelectedSkillCategory = useSetAtom(selectedSkillCategoryAtom)
-  const setSelectedSkill = useSetAtom(selectedSkillAtom)
+  const setSelectedWorkflowNode = useSetAtom(selectedWorkflowNodeAtom)
+  const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
 
   // Fetch skills using tRPC
   const { data: skills, isLoading } = trpc.skills.list.useQuery({
@@ -125,8 +125,15 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
                       key={skill.path}
                       className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer"
                       onClick={() => {
-                        setSelectedSkill(skill.path)
-                        setSelectedSkillCategory("skills")
+                        // Set the selected workflow node
+                        setSelectedWorkflowNode({
+                          id: skill.name,
+                          name: skill.name,
+                          type: "skill",
+                          sourcePath: skill.path,
+                        })
+                        // Switch to workflows view with skills category
+                        setWorkflowCategory("skills")
                       }}
                     >
                       <Sparkles className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />

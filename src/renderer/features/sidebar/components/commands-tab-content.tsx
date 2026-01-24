@@ -6,8 +6,8 @@ import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
-import { selectedCommandCategoryAtom, selectedCommandNodeAtom } from "../../commands/atoms"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { selectedWorkflowCategoryAtom, selectedWorkflowNodeAtom } from "../../workflows/atoms"
+import { useAtomValue, useSetAtom } from "jotai"
 
 interface CommandsTabContentProps {
   className?: string
@@ -39,8 +39,8 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const [selectedCommandNode, setSelectedCommandNode] = useAtom(selectedCommandNodeAtom)
-  const setCommandCategory = useSetAtom(selectedCommandCategoryAtom)
+  const setSelectedWorkflowNode = useSetAtom(selectedWorkflowNodeAtom)
+  const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
 
   // Fetch commands using tRPC
   const { data: commands, isLoading } = trpc.commands.list.useQuery({
@@ -115,58 +115,40 @@ export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTa
               </div>
               <div className="space-y-0.5">
                 {cmds.map((cmd) => {
-                  const isSelected = selectedCommandNode?.sourcePath === cmd.path
                   return (
                     <div
                       key={cmd.path}
                       onClick={() => {
-                        // Set the selected command node
-                        setSelectedCommandNode({
+                        // Set the selected workflow node
+                        setSelectedWorkflowNode({
                           id: cmd.name,
                           name: cmd.name,
-                          description: cmd.description || "",
-                          source: cmd.source,
+                          type: "command",
                           sourcePath: cmd.path,
                         })
-                        // Trigger the full-page commands view
-                        setCommandCategory("commands")
+                        // Switch to workflows view with commands category
+                        setWorkflowCategory("commands")
                       }}
                       className={cn(
                         "group flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
-                        isSelected
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-foreground/5"
+                        "hover:bg-foreground/5"
                       )}
                     >
-                      <Terminal className={cn(
-                        "h-4 w-4 flex-shrink-0 mt-0.5",
-                        isSelected ? "text-accent-foreground" : "text-muted-foreground"
-                      )} />
+                      <Terminal className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "text-sm font-medium truncate",
-                            isSelected ? "text-accent-foreground" : "text-foreground"
-                          )}>
+                          <span className="text-sm font-medium truncate text-foreground">
                             /{cmd.name}
                           </span>
                           <SourceBadge source={cmd.source} />
                         </div>
                         {cmd.description && (
-                          <p className={cn(
-                            "text-xs truncate mt-0.5",
-                            isSelected ? "text-accent-foreground/70" : "text-muted-foreground"
-                          )}>
+                          <p className="text-xs truncate mt-0.5 text-muted-foreground">
                             {cmd.description}
                           </p>
                         )}
                       </div>
-                      <ChevronRight className={cn(
-                        "h-3.5 w-3.5 flex-shrink-0 mt-1 transition-opacity",
-                        isSelected
-                          ? "opacity-100 text-accent-foreground/50"
-                          : "opacity-0 group-hover:opacity-100 text-muted-foreground/50"
-                      )} />
+                      <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50" />
                     </div>
                   )
                 })}

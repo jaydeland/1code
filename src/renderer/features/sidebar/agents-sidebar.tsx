@@ -29,7 +29,6 @@ import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
 import { ClustersSidebarSection, selectedClustersCategoryAtom } from "../clusters"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../mcp/atoms"
-import { selectedSkillCategoryAtom } from "../skills/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
@@ -1398,7 +1397,6 @@ export function AgentsSidebar({
   const setSelectedCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
-  const setSelectedSkillCategory = useSetAtom(selectedSkillCategoryAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
@@ -1932,12 +1930,11 @@ export function AgentsSidebar({
       setSelectedCategory(null)
       setSelectedMcpCategory(null)
       setSelectedClustersCategory(null)
-      setSelectedSkillCategory(null)
       if (isMobileFullscreen && onChatSelect) {
         onChatSelect()
       }
     },
-    [setSelectedChatId, setSelectedDraftId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedSkillCategory, isMobileFullscreen, onChatSelect],
+    [setSelectedChatId, setSelectedDraftId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect],
   )
 
   // Reset focused index when search query changes
@@ -2010,7 +2007,6 @@ export function AgentsSidebar({
     setSelectedCategory(null)
     setSelectedMcpCategory(null)
     setSelectedClustersCategory(null)
-    setSelectedSkillCategory(null)
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2084,14 +2080,12 @@ export function AgentsSidebar({
     setSelectedMcpCategory(null)
     // Clear clusters category when chat is selected
     setSelectedClustersCategory(null)
-    // Clear skills category when chat is selected
-    setSelectedSkillCategory(null)
 
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedSkillCategory, isMobileFullscreen, onChatSelect])
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
