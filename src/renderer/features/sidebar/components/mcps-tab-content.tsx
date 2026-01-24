@@ -7,6 +7,11 @@ import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
 import { useAtomValue } from "jotai"
+import type { inferRouterOutputs } from "@trpc/server"
+import type { AppRouter } from "../../../../main/lib/trpc/routers"
+
+type RouterOutput = inferRouterOutputs<AppRouter>
+type McpServerType = RouterOutput["mcp"]["listServers"]["servers"][number]
 
 interface McpsTabContentProps {
   className?: string
@@ -78,12 +83,12 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
   })
 
   // Filter MCP servers by search query
-  const filteredServers = useMemo(() => {
-    if (!mcpServers) return []
-    if (!searchQuery.trim()) return mcpServers
+  const filteredServers = useMemo((): McpServerType[] => {
+    if (!mcpServers?.servers) return []
+    if (!searchQuery.trim()) return mcpServers.servers
 
     const query = searchQuery.toLowerCase()
-    return mcpServers.filter(
+    return mcpServers.servers.filter(
       (server) =>
         server.name.toLowerCase().includes(query) ||
         server.id.toLowerCase().includes(query),
@@ -92,7 +97,7 @@ export function McpsTabContent({ className, isMobileFullscreen }: McpsTabContent
 
   // Group servers by source
   const groupedServers = useMemo(() => {
-    const groups: Record<string, typeof filteredServers> = {}
+    const groups: Record<string, McpServerType[]> = {}
 
     for (const server of filteredServers) {
       const source = server.source?.type || "user"
