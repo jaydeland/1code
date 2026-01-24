@@ -138,8 +138,9 @@ export function AwsStatusBar() {
     return () => clearInterval(interval)
   }, [awsStatus, checkAndRefresh])
 
-  // Don't show if not authenticated with AWS
-  if (!awsStatus?.authenticated || !awsStatus?.hasCredentials) {
+  // Don't show if not using AWS auth mode or not configured
+  // Show even if credentials expired so user can refresh
+  if (!awsStatus?.authMode || awsStatus.authMode !== "aws" || !awsStatus?.configured) {
     return null
   }
 
@@ -169,13 +170,20 @@ export function AwsStatusBar() {
           <span className="font-medium">AWS</span>
         </div>
 
-        {/* Account */}
-        <div className="flex items-center gap-1">
-          <span className="text-muted-foreground/70">Account:</span>
-          <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
-            {awsStatus.accountName || awsStatus.accountId || "Unknown"}
-          </span>
-        </div>
+        {/* Account - show if available, otherwise show "Not authenticated" */}
+        {awsStatus.accountName || awsStatus.accountId ? (
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground/70">Account:</span>
+            <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
+              {awsStatus.accountName || awsStatus.accountId}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground/70">Status:</span>
+            <span className="font-semibold text-red-600 dark:text-red-500">Not authenticated</span>
+          </div>
+        )}
 
         {/* Role */}
         {awsStatus.roleName && (

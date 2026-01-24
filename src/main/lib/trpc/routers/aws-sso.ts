@@ -314,6 +314,7 @@ export const awsSsoRouter = router({
         configured: false,
         authenticated: false,
         hasCredentials: false,
+        authMode: "oauth" as const,
       }
     }
 
@@ -325,6 +326,7 @@ export const awsSsoRouter = router({
       configured: !!settings.ssoStartUrl && !!settings.ssoRegion,
       authenticated: !!settings.ssoAccessToken && tokenValid,
       hasCredentials: !!settings.awsAccessKeyId && credsValid,
+      authMode: settings.authMode as "oauth" | "aws" | "apiKey",
       ssoStartUrl: settings.ssoStartUrl,
       ssoRegion: settings.ssoRegion,
       accountId: settings.ssoAccountId,
