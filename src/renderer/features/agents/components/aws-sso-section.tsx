@@ -22,12 +22,15 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog"
 import { trpc } from "../../../lib/trpc"
+import { Switch } from "../../../components/ui/switch"
 
 interface AwsSsoSectionProps {
   bedrockRegion: string
   onBedrockRegionChange: (region: string) => void
   onSave: () => void
   isSaving: boolean
+  vpnCheckEnabled?: boolean
+  onVpnCheckEnabledChange: (enabled: boolean) => void
 }
 
 type ConnectionMethod = "sso" | "profile"
@@ -83,6 +86,8 @@ export function AwsSsoSection({
   onBedrockRegionChange,
   onSave,
   isSaving,
+  vpnCheckEnabled,
+  onVpnCheckEnabledChange,
 }: AwsSsoSectionProps) {
   const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>("sso")
   const [ssoStartUrl, setSsoStartUrl] = useState("")
@@ -602,6 +607,20 @@ export function AwsSsoSection({
         <p className="text-xs text-muted-foreground">
           AWS region to use for Bedrock API calls (must have Claude models enabled)
         </p>
+      </div>
+
+      {/* VPN Check Toggle */}
+      <div className="flex items-center justify-between space-x-4 p-3 bg-muted/50 rounded-lg">
+        <div className="flex-1 space-y-1">
+          <Label className="text-sm font-medium">AWS VPN Status Monitor</Label>
+          <p className="text-xs text-muted-foreground">
+            Monitor AWS VPN connectivity in the status bar. Checks connectivity to AWS internal resources.
+          </p>
+        </div>
+        <Switch
+          checked={vpnCheckEnabled || false}
+          onCheckedChange={onVpnCheckEnabledChange}
+        />
       </div>
 
       {/* Save Button */}

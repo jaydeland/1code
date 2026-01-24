@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { Cloud, RefreshCw, Clock, AlertTriangle, Server } from "lucide-react"
+import { Cloud, RefreshCw, Clock, AlertTriangle, Server, Shield } from "lucide-react"
 import { trpc } from "../lib/trpc"
 import { cn } from "../lib/utils"
 import { toast } from "sonner"
@@ -74,6 +74,12 @@ export function AwsStatusBar() {
   // Query AWS status
   const { data: awsStatus, refetch: refetchStatus } = trpc.awsSso.getStatus.useQuery(undefined, {
     refetchInterval: 60000, // Update every minute
+  })
+
+  // Query VPN status
+  const { data: vpnStatus } = trpc.awsSso.checkVpnStatus.useQuery(undefined, {
+    enabled: !!awsStatus?.authenticated,
+    refetchInterval: 60000, // Check every minute
   })
 
   // Query derived namespace from email
@@ -199,6 +205,28 @@ export function AwsStatusBar() {
           </div>
         )}
       </div>
+
+      {/* VPN Status Indicator */}
+      {vpnStatus?.enabled && (
+        <div
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded mr-2"
+          title={
+            vpnStatus.connected
+              ? "VPN Connected"
+              : "VPN Disconnected - Cannot reach internal network"
+          }
+        >
+          {/* Connection status dot */}
+          <span
+            className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              vpnStatus.connected ? "bg-emerald-500" : "bg-red-500"
+            )}
+          />
+          <Shield className="h-3 w-3" />
+          <span className="text-xs">VPN</span>
+        </div>
+      )}
 
       {/* K8s Cluster Indicator (right side) */}
       {clustersEnabled && selectedClusterId && (

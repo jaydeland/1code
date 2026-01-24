@@ -2,6 +2,7 @@
  * Kubernetes service wrapping kubernetesjs with EKS authentication
  * Provides high-level methods for cluster operations
  */
+import { Agent, setGlobalDispatcher } from "undici"
 import { KubernetesClient } from "kubernetesjs"
 import type { EksClusterInfo } from "../aws/eks-service"
 
@@ -51,14 +52,43 @@ export interface K8sService {
 }
 
 /**
+ * Global dispatcher for kubernetes requests with proper CA certificate handling
+ */
+let globalK8sDispatcher: Agent | null = null
+let currentCaCertificate: string | null = null
+
+/**
+ * Creates a undici Agent configured with the EKS CA certificate
+ */
+function createK8sDispatcher(caCertificate: string): Agent {
+  // Decode base64-encoded CA certificate
+  const ca = Buffer.from(caCertificate, "base64").toString("utf8")
+
+  return new Agent({
+    connect: {
+      ca,
+      rejectUnauthorized: true, // Enable certificate validation
+    },
+  })
+}
+
+/**
  * Creates an authenticated Kubernetes client for an EKS cluster
  */
 export function createK8sClient(
   cluster: EksClusterInfo,
   token: string
 ): KubernetesClient {
+  // Create and set global dispatcher with CA certificate
+  // Update dispatcher if CA certificate has changed (for multi-cluster support)
+  if (!globalK8sDispatcher || currentCaCertificate !== cluster.certificateAuthority) {
+    console.log("[k8s] Setting up undici dispatcher with CA certificate")
+    globalK8sDispatcher = createK8sDispatcher(cluster.certificateAuthority)
+    currentCaCertificate = cluster.certificateAuthority
+    setGlobalDispatcher(globalK8sDispatcher)
+  }
+
   // kubernetesjs expects just the endpoint URL
-  // We need to handle the CA certificate separately via a custom fetch
   const client = new KubernetesClient({
     restEndpoint: cluster.endpoint,
   })

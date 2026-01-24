@@ -4,6 +4,10 @@ import { eq } from "drizzle-orm"
 import { router, publicProcedure } from "../index"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { AwsSsoService, decrypt } from "../../aws/sso-service"
+import { lookupService } from "dns"
+import { promisify } from "util"
+
+const dnsLookup = promisify(lookupService)
 
 // Cached service instance
 let ssoService: AwsSsoService | null = null
@@ -426,4 +430,95 @@ export const awsSsoRouter = router({
 
     return { success: true }
   }),
+
+  /**
+   * Check VPN connectivity status
+   * Checks connectivity to AWS internal resources (SSO endpoint)
+   */
+  checkVpnStatus: publicProcedure.query(async () => {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    // If VPN check is disabled, skip check
+    if (!settings?.vpnCheckEnabled) {
+      return {
+        enabled: false,
+        connected: false,
+        lastChecked: new Date().toISOString(),
+      }
+    }
+
+    // Use AWS SSO endpoint for VPN check
+    // If user has SSO configured, use their region; otherwise use us-east-1
+    const ssoRegion = settings.ssoRegion || "us-east-1"
+    const hostname = `oidc.${ssoRegion}.amazonaws.com`
+
+    // Try DNS lookup with short timeout
+    try {
+      const lookupPromise = dnsLookup(hostname)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("DNS lookup timeout")), 3000)
+      )
+
+      await Promise.race([lookupPromise, timeoutPromise])
+
+      // DNS resolved successfully, VPN/network is connected
+      return {
+        enabled: true,
+        connected: true,
+        lastChecked: new Date().toISOString(),
+      }
+    } catch (error: any) {
+      // DNS lookup failed or timeout - VPN/network likely disconnected
+      console.log("[vpn-check] DNS lookup failed:", error.message)
+      return {
+        enabled: true,
+        connected: false,
+        lastChecked: new Date().toISOString(),
+      }
+    }
+  }),
+
+  /**
+   * Update VPN check enabled setting
+   */
+  updateVpnCheckEnabled: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Get or create settings
+      let settings = db
+        .select()
+        .from(claudeCodeSettings)
+        .where(eq(claudeCodeSettings.id, "default"))
+        .get()
+
+      if (settings) {
+        db.update(claudeCodeSettings)
+          .set({
+            vpnCheckEnabled: input.enabled,
+            updatedAt: new Date(),
+          })
+          .where(eq(claudeCodeSettings.id, "default"))
+          .run()
+      } else {
+        db.insert(claudeCodeSettings)
+          .values({
+            id: "default",
+            customEnvVars: "{}",
+            mcpServerSettings: "{}",
+            authMode: "oauth",
+            bedrockRegion: "us-east-1",
+            vpnCheckEnabled: input.enabled,
+          })
+          .run()
+      }
+
+      return { success: true }
+    }),
 })

@@ -102,6 +102,7 @@ export const claudeSettingsRouter = router({
       apiKey: settings.apiKey ? "••••••••" : null, // Masked for UI
       bedrockRegion: settings.bedrockRegion || "us-east-1",
       anthropicBaseUrl: settings.anthropicBaseUrl || null,
+      vpnCheckEnabled: settings.vpnCheckEnabled || false,
     }
   }),
 
@@ -120,6 +121,7 @@ export const claudeSettingsRouter = router({
         apiKey: z.string().optional(), // API key for apiKey mode
         bedrockRegion: z.string().optional(), // AWS region for Bedrock
         anthropicBaseUrl: z.string().nullable().optional(), // Custom Anthropic API base URL
+        vpnCheckEnabled: z.boolean().optional(), // Enable/disable VPN status monitoring
       })
     )
     .mutation(({ input }) => {
@@ -172,6 +174,9 @@ export const claudeSettingsRouter = router({
             ...(input.anthropicBaseUrl !== undefined && {
               anthropicBaseUrl: input.anthropicBaseUrl,
             }),
+            ...(input.vpnCheckEnabled !== undefined && {
+              vpnCheckEnabled: input.vpnCheckEnabled,
+            }),
             updatedAt: new Date(),
           })
           .where(eq(claudeCodeSettings.id, "default"))
@@ -188,6 +193,7 @@ export const claudeSettingsRouter = router({
             authMode: input.authMode ?? "oauth",
             bedrockRegion: input.bedrockRegion ?? "us-east-1",
             anthropicBaseUrl: input.anthropicBaseUrl ?? null,
+            vpnCheckEnabled: input.vpnCheckEnabled ?? false,
             ...(input.authMode === "apiKey" && input.apiKey && {
               apiKey: encryptApiKey(input.apiKey),
             }),

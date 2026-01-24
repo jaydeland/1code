@@ -144,6 +144,9 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   awsSecretAccessKey: text("aws_secret_access_key"),
   awsSessionToken: text("aws_session_token"),
   awsCredentialsExpiresAt: integer("aws_credentials_expires_at", { mode: "timestamp" }),
+
+  // VPN connectivity check
+  vpnCheckEnabled: integer("vpn_check_enabled", { mode: "boolean" }).notNull().default(false), // Enable/disable VPN status monitoring
 })
 
 // ============ MCP SERVER CREDENTIALS ============
