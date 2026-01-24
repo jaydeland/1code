@@ -6,7 +6,12 @@ import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
-import { useAtomValue } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
+import {
+  selectedAgentDefCategoryAtom,
+  selectedAgentDefAtom,
+  type SelectedAgentDef,
+} from "../../agents-defs/atoms"
 
 interface AgentsTabContentProps {
   className?: string
@@ -38,11 +43,31 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const setSelectedAgentDefCategory = useSetAtom(selectedAgentDefCategoryAtom)
+  const setSelectedAgentDef = useSetAtom(selectedAgentDefAtom)
 
   // Fetch agents using tRPC
   const { data: agents, isLoading } = trpc.agents.list.useQuery({
     cwd: selectedProject?.path,
   })
+
+  // Handle agent click - sets the category and selected agent
+  const handleAgentClick = (agent: {
+    name: string
+    path: string
+    source: "user" | "project" | "custom"
+    description?: string
+    model?: string
+  }) => {
+    setSelectedAgentDefCategory("agents")
+    setSelectedAgentDef({
+      name: agent.name,
+      path: agent.path,
+      source: agent.source,
+      description: agent.description,
+      model: agent.model,
+    })
+  }
 
   // Filter agents by search query
   const filteredAgents = useMemo(() => {
@@ -118,9 +143,10 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
                 </div>
                 <div className="space-y-0.5">
                   {agentList.map((agent) => (
-                    <div
+                    <button
                       key={agent.path}
-                      className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-default"
+                      onClick={() => handleAgentClick(agent)}
+                      className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer w-full text-left"
                     >
                       <Bot className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
@@ -142,7 +168,7 @@ export function AgentsTabContent({ className, isMobileFullscreen }: AgentsTabCon
                         )}
                       </div>
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

@@ -5,8 +5,9 @@ import { Terminal, ChevronRight } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
-import { selectedProjectAtom, selectedCommandAtom } from "../../agents/atoms"
-import { useAtom, useAtomValue } from "jotai"
+import { selectedProjectAtom } from "../../agents/atoms"
+import { selectedCommandCategoryAtom, selectedCommandNodeAtom } from "../../commands/atoms"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 
 interface CommandsTabContentProps {
   className?: string
@@ -38,7 +39,8 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const [selectedCommand, setSelectedCommand] = useAtom(selectedCommandAtom)
+  const [selectedCommandNode, setSelectedCommandNode] = useAtom(selectedCommandNodeAtom)
+  const setCommandCategory = useSetAtom(selectedCommandCategoryAtom)
 
   // Fetch commands using tRPC
   const { data: commands, isLoading } = trpc.commands.list.useQuery({
@@ -113,11 +115,22 @@ export function CommandsTabContent({ className, isMobileFullscreen }: CommandsTa
               </div>
               <div className="space-y-0.5">
                 {cmds.map((cmd) => {
-                  const isSelected = selectedCommand === cmd.path
+                  const isSelected = selectedCommandNode?.sourcePath === cmd.path
                   return (
                     <div
                       key={cmd.path}
-                      onClick={() => setSelectedCommand(cmd.path)}
+                      onClick={() => {
+                        // Set the selected command node
+                        setSelectedCommandNode({
+                          id: cmd.name,
+                          name: cmd.name,
+                          description: cmd.description || "",
+                          source: cmd.source,
+                          sourcePath: cmd.path,
+                        })
+                        // Trigger the full-page commands view
+                        setCommandCategory("commands")
+                      }}
                       className={cn(
                         "group flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
                         isSelected

@@ -317,4 +317,45 @@ export const agentsRouter = router({
 
       return { deleted: true }
     }),
+
+  /**
+   * Read the content of an agent file
+   * Used by the agent detail view to show raw markdown content
+   */
+  readFileContent: publicProcedure
+    .input(z.object({ path: z.string() }))
+    .query(async ({ input }) => {
+      const homeDir = os.homedir()
+      const claudeDir = path.join(homeDir, ".claude")
+
+      // Security: resolve both paths and ensure target is within allowed directories
+      const resolvedTarget = path.resolve(input.path)
+      const resolvedClaudeDir = path.resolve(claudeDir)
+
+      // Check if path is within ~/.claude/ or is a valid project .claude path
+      const isInClaudeDir = resolvedTarget.startsWith(resolvedClaudeDir)
+      const isInProjectClaudeDir = resolvedTarget.includes(`${path.sep}.claude${path.sep}agents${path.sep}`)
+
+      if (!isInClaudeDir && !isInProjectClaudeDir) {
+        throw new Error("Access denied: path is outside allowed directories")
+      }
+
+      // Path traversal check
+      if (input.path.includes("..")) {
+        throw new Error("Access denied: path traversal detected")
+      }
+
+      // Check if path is a file (not a directory)
+      try {
+        const stats = await fs.stat(resolvedTarget)
+        if (!stats.isFile()) {
+          throw new Error("Path is not a file")
+        }
+      } catch (err) {
+        throw new Error(`File not found: ${input.path}`)
+      }
+
+      // Read and return file content
+      return await fs.readFile(resolvedTarget, "utf-8")
+    }),
 })

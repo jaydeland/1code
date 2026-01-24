@@ -6,7 +6,8 @@ import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
 import { Input } from "../../../components/ui/input"
 import { selectedProjectAtom } from "../../agents/atoms"
-import { useAtomValue } from "jotai"
+import { selectedSkillCategoryAtom, selectedSkillAtom } from "../../skills/atoms"
+import { useAtomValue, useSetAtom } from "jotai"
 
 interface SkillsTabContentProps {
   className?: string
@@ -38,6 +39,8 @@ function SourceBadge({ source }: { source: "user" | "project" | "custom" }) {
 export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabContentProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const setSelectedSkillCategory = useSetAtom(selectedSkillCategoryAtom)
+  const setSelectedSkill = useSetAtom(selectedSkillAtom)
 
   // Fetch skills using tRPC
   const { data: skills, isLoading } = trpc.skills.list.useQuery({
@@ -120,7 +123,11 @@ export function SkillsTabContent({ className, isMobileFullscreen }: SkillsTabCon
                   {skillList.map((skill) => (
                     <div
                       key={skill.path}
-                      className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-default"
+                      className="group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 cursor-pointer"
+                      onClick={() => {
+                        setSelectedSkill(skill.path)
+                        setSelectedSkillCategory("skills")
+                      }}
                     >
                       <Sparkles className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
