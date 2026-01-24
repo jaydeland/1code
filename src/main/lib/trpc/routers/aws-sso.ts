@@ -6,6 +6,9 @@ import { getDatabase, claudeCodeSettings } from "../../db"
 import { AwsSsoService, decrypt } from "../../aws/sso-service"
 import { lookup } from "dns"
 import { promisify } from "util"
+import * as https from "https"
+import * as http from "http"
+import { URL } from "url"
 
 const dnsLookup = promisify(lookup)
 
@@ -458,19 +461,41 @@ export const awsSsoRouter = router({
     // If user provided a custom URL, check that
     if (checkUrl) {
       try {
-        // Try HTTP HEAD request with timeout
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000)
+        // Parse URL
+        const parsedUrl = new URL(checkUrl)
+        const isHttps = parsedUrl.protocol === "https:"
+        const requestModule = isHttps ? https : http
 
-        const response = await fetch(checkUrl, {
-          method: "HEAD",
-          signal: controller.signal,
+        // Try HTTP HEAD request with timeout and accept self-signed certs
+        await new Promise<void>((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error("Request timeout"))
+          }, 3000)
+
+          const options = {
+            method: "HEAD",
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port || (isHttps ? 443 : 80),
+            path: parsedUrl.pathname + parsedUrl.search,
+            // Accept self-signed certificates for internal URLs
+            rejectUnauthorized: false,
+          }
+
+          const req = requestModule.request(options, (res) => {
+            clearTimeout(timeoutId)
+            // Any response means we reached the server
+            console.log("[vpn-check] Custom URL check succeeded:", checkUrl, res.statusCode)
+            resolve()
+          })
+
+          req.on("error", (error) => {
+            clearTimeout(timeoutId)
+            reject(error)
+          })
+
+          req.end()
         })
 
-        clearTimeout(timeoutId)
-
-        // If we get any response (even 4xx/5xx), it means we reached the server
-        console.log("[vpn-check] Custom URL check succeeded:", checkUrl, response.status)
         return {
           enabled: true,
           connected: true,
