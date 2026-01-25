@@ -2,9 +2,12 @@ import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
 import {
   analyticsOptOutAtom,
+  autoAdvanceTargetAtom,
   ctrlTabTargetAtom,
+  desktopNotificationsEnabledAtom,
   extendedThinkingEnabledAtom,
   soundNotificationsEnabledAtom,
+  type AutoAdvanceTarget,
   type CtrlTabTarget,
 } from "../../../lib/atoms"
 import { Kbd } from "../../ui/kbd"
@@ -15,6 +18,7 @@ import {
   SelectTrigger,
 } from "../../ui/select"
 import { Switch } from "../../ui/switch"
+import { trpc } from "../../../lib/trpc"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -38,9 +42,25 @@ export function AgentsPreferencesTab() {
     extendedThinkingEnabledAtom,
   )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
+  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(desktopNotificationsEnabledAtom)
   const [analyticsOptOut, setAnalyticsOptOut] = useAtom(analyticsOptOutAtom)
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
+  const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(autoAdvanceTargetAtom)
   const isNarrowScreen = useIsNarrowScreen()
+
+  // Co-authored-by setting from Claude settings.json
+  const { data: includeCoAuthoredBy, refetch: refetchCoAuthoredBy } =
+    trpc.claudeSettings.getIncludeCoAuthoredBy.useQuery()
+  const setCoAuthoredByMutation =
+    trpc.claudeSettings.setIncludeCoAuthoredBy.useMutation({
+      onSuccess: () => {
+        refetchCoAuthoredBy()
+      },
+    })
+
+  const handleCoAuthoredByToggle = (enabled: boolean) => {
+    setCoAuthoredByMutation.mutate({ enabled })
+  }
 
   // Sync opt-out status to main process
   const handleAnalyticsToggle = async (optedOut: boolean) => {
@@ -86,6 +106,19 @@ export function AgentsPreferencesTab() {
             />
           </div>
 
+          {/* Desktop Notifications Toggle */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Desktop Notifications
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Show system notifications when agent needs input or completes work
+              </span>
+            </div>
+            <Switch checked={desktopNotificationsEnabled} onCheckedChange={setDesktopNotificationsEnabled} />
+          </div>
+
           {/* Sound Notifications Toggle */}
           <div className="flex items-start justify-between">
             <div className="flex flex-col space-y-1">
@@ -98,35 +131,80 @@ export function AgentsPreferencesTab() {
             </div>
             <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
           </div>
-        </div>
-      </div>
 
-      {/* Keyboard Shortcuts Section */}
-      <div className="bg-background rounded-lg border border-border overflow-hidden">
-        <div className="flex items-start justify-between p-4">
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Quick Switch
-            </span>
-            <span className="text-xs text-muted-foreground">
-              What <Kbd>⌃Tab</Kbd> switches between
-            </span>
+          {/* Co-Authored-By Toggle */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Include Co-Authored-By
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Add "Co-authored-by: Claude" to git commits made by Claude
+              </span>
+            </div>
+            <Switch
+              checked={includeCoAuthoredBy ?? true}
+              onCheckedChange={handleCoAuthoredByToggle}
+              disabled={setCoAuthoredByMutation.isPending}
+            />
           </div>
 
-          <Select
-            value={ctrlTabTarget}
-            onValueChange={(value: CtrlTabTarget) => setCtrlTabTarget(value)}
-          >
-            <SelectTrigger className="w-auto px-2">
-              <span className="text-xs">
-                {ctrlTabTarget === "workspaces" ? "Workspaces" : "Agents"}
+          {/* Quick Switch */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Quick Switch
               </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="workspaces">Workspaces</SelectItem>
-              <SelectItem value="agents">Agents</SelectItem>
-            </SelectContent>
-          </Select>
+              <span className="text-xs text-muted-foreground">
+                What <Kbd>⌃Tab</Kbd> switches between
+              </span>
+            </div>
+            <Select
+              value={ctrlTabTarget}
+              onValueChange={(value: CtrlTabTarget) => setCtrlTabTarget(value)}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {ctrlTabTarget === "workspaces" ? "Workspaces" : "Agents"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="workspaces">Workspaces</SelectItem>
+                <SelectItem value="agents">Agents</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Auto-advance */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Auto-advance
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Where to go after archiving a workspace
+              </span>
+            </div>
+            <Select
+              value={autoAdvanceTarget}
+              onValueChange={(value: AutoAdvanceTarget) => setAutoAdvanceTarget(value)}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs">
+                  {autoAdvanceTarget === "next"
+                    ? "Go to next workspace"
+                    : autoAdvanceTarget === "previous"
+                      ? "Go to previous workspace"
+                      : "Close workspace"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="next">Go to next workspace</SelectItem>
+                <SelectItem value="previous">Go to previous workspace</SelectItem>
+                <SelectItem value="close">Close workspace</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

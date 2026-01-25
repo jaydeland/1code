@@ -2,8 +2,29 @@ import { useAtom } from "jotai"
 import { useState, useEffect } from "react"
 import {
   historyEnabledAtom,
+<<<<<<< HEAD
+=======
+  showOfflineModeFeaturesAtom,
+  autoOfflineModeAtom,
+  selectedOllamaModelAtom,
+  betaKanbanEnabledAtom,
+>>>>>>> upstream/main
 } from "../../../lib/atoms"
 import { Switch } from "../../ui/switch"
+<<<<<<< HEAD
+=======
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select"
+import { ExternalLinkIcon } from "../../ui/icons"
+import { Copy, Check, RefreshCw } from "lucide-react"
+import { Button } from "../../ui/button"
+import { cn } from "../../../lib/utils"
+>>>>>>> upstream/main
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -25,6 +46,60 @@ function useIsNarrowScreen(): boolean {
 export function AgentsBetaTab() {
   const isNarrowScreen = useIsNarrowScreen()
   const [historyEnabled, setHistoryEnabled] = useAtom(historyEnabledAtom)
+<<<<<<< HEAD
+=======
+  const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(showOfflineModeFeaturesAtom)
+  const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
+  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+  const [kanbanEnabled, setKanbanEnabled] = useAtom(betaKanbanEnabledAtom)
+  const [copied, setCopied] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "not-available" | "error">("idle")
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+
+  // Get current version on mount
+  useEffect(() => {
+    window.desktopApi?.getVersion().then(setCurrentVersion)
+  }, [])
+
+  // Check for updates with force flag to bypass cache
+  const handleCheckForUpdates = async () => {
+    // Check if we're in dev mode
+    const isPackaged = await window.desktopApi?.isPackaged?.()
+    if (!isPackaged) {
+      setUpdateStatus("error")
+      console.log("Update check skipped in dev mode")
+      return
+    }
+
+    setUpdateStatus("checking")
+    setUpdateVersion(null)
+    try {
+      const result = await window.desktopApi?.checkForUpdates(true)
+      if (result) {
+        setUpdateStatus("available")
+        setUpdateVersion(result.version)
+      } else {
+        setUpdateStatus("not-available")
+      }
+    } catch (error) {
+      console.error("Failed to check for updates:", error)
+      setUpdateStatus("error")
+    }
+  }
+
+  // Get Ollama status
+  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
+    refetchInterval: showOfflineFeatures ? 30000 : false, // Only poll when feature is enabled
+    enabled: showOfflineFeatures,
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(`ollama pull ${RECOMMENDED_MODEL}`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+>>>>>>> upstream/main
 
   return (
     <div className="p-6 space-y-6">
@@ -56,8 +131,223 @@ export function AgentsBetaTab() {
               onCheckedChange={setHistoryEnabled}
             />
           </div>
+<<<<<<< HEAD
         </div>
       </div>
+=======
+
+          {/* Offline Mode Toggle */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Offline Mode
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Enable offline mode UI and Ollama integration.
+              </span>
+            </div>
+            <Switch
+              checked={showOfflineFeatures}
+              onCheckedChange={setShowOfflineFeatures}
+            />
+          </div>
+
+          {/* Kanban Board Toggle */}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                Kanban Board
+              </span>
+              <span className="text-xs text-muted-foreground">
+                View workspaces as a Kanban board organized by status.
+              </span>
+            </div>
+            <Switch
+              checked={kanbanEnabled}
+              onCheckedChange={setKanbanEnabled}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Offline Mode Settings - only show when feature is enabled */}
+      {showOfflineFeatures && (
+        <div className="space-y-2">
+          <div className="pb-2">
+            <h4 className="text-sm font-medium text-foreground">Offline Mode Settings</h4>
+          </div>
+
+          <div className="bg-background rounded-lg border border-border overflow-hidden">
+            <div className="p-4 space-y-4">
+              {/* Status */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-foreground">
+                    Ollama Status
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    {ollamaStatus?.ollama.available
+                      ? `Running - ${ollamaStatus.ollama.models.length} model${ollamaStatus.ollama.models.length !== 1 ? 's' : ''} installed`
+                      : 'Not running or not installed'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {ollamaStatus?.ollama.available ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      <span className="text-sm text-emerald-500">Available</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
+                      <span className="text-sm text-muted-foreground">Unavailable</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Model selector */}
+              {ollamaStatus?.ollama.available && ollamaStatus.ollama.models.length > 0 && (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-foreground">
+                      Model
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      Select which model to use for offline mode
+                    </p>
+                  </div>
+                  <Select
+                    value={selectedOllamaModel || ollamaStatus.ollama.recommendedModel || ollamaStatus.ollama.models[0]}
+                    onValueChange={(value) => setSelectedOllamaModel(value)}
+                  >
+                    <SelectTrigger className="w-auto shrink-0">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ollamaStatus.ollama.models.map((model) => {
+                        const isRecommended = model === ollamaStatus.ollama.recommendedModel
+                        return (
+                          <SelectItem key={model} value={model}>
+                            <span className="truncate">
+                              {model}
+                              {isRecommended && (
+                                <span className="text-muted-foreground ml-1 text-xs">(recommended)</span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Auto-fallback toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-foreground">
+                    Auto Offline Mode
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically use Ollama when internet is unavailable
+                  </p>
+                </div>
+                <Switch
+                  checked={autoOffline}
+                  onCheckedChange={setAutoOffline}
+                />
+              </div>
+
+              {/* Installation instructions - always show */}
+              <div className="text-xs text-muted-foreground bg-muted p-3 rounded space-y-2">
+                <p className="font-medium">Setup Instructions:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>
+                    Install Ollama {MINIMUM_OLLAMA_VERSION}+ from{" "}
+                    <a
+                      href="https://ollama.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline inline-flex items-center gap-0.5"
+                    >
+                      ollama.com
+                      <ExternalLinkIcon className="h-3 w-3" />
+                    </a>
+                  </li>
+                  <li>
+                    Pull the recommended model:{" "}
+                    <code className="relative inline-flex items-center gap-1 bg-background pl-1.5 pr-0.5 py-0.5 rounded-md">
+                      <span>ollama pull {RECOMMENDED_MODEL}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopy}
+                        className="p-1 hover:bg-muted rounded transition-colors"
+                        title={copied ? "Copied!" : "Copy command"}
+                      >
+                        <div className="relative w-3 h-3">
+                          <Copy
+                            className={cn(
+                              "absolute inset-0 w-3 h-3 text-muted-foreground transition-[opacity,transform] duration-200 ease-out hover:text-foreground",
+                              copied ? "opacity-0 scale-50" : "opacity-100 scale-100",
+                            )}
+                          />
+                          <Check
+                            className={cn(
+                              "absolute inset-0 w-3 h-3 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                              copied ? "opacity-100 scale-100" : "opacity-0 scale-50",
+                            )}
+                          />
+                        </div>
+                      </button>
+                    </code>
+                  </li>
+                  <li>Ollama will run automatically in the background</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Updates Section */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">Updates</h4>
+          <p className="text-xs text-muted-foreground mt-1">
+            Check for new versions manually (bypasses CDN cache)
+          </p>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col space-y-1">
+                <span className="text-sm font-medium text-foreground">
+                  {currentVersion ? `Current: v${currentVersion}` : "Version"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {updateStatus === "checking" && "Checking for updates..."}
+                  {updateStatus === "available" && `Update available: v${updateVersion}`}
+                  {updateStatus === "not-available" && "You're on the latest version"}
+                  {updateStatus === "error" && "Failed to check (dev mode?)"}
+                  {updateStatus === "idle" && "Click to check for updates"}
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCheckForUpdates}
+                disabled={updateStatus === "checking"}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", updateStatus === "checking" && "animate-spin")} />
+                {updateStatus === "checking" ? "Checking..." : "Check Now"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+>>>>>>> upstream/main
     </div>
   )
 }

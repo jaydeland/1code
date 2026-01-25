@@ -1,6 +1,5 @@
 // Dialogs
 export { AgentsSettingsDialog } from "./agents-settings-dialog"
-export { AgentsHelpPopover } from "./agents-help-popover"
 
 // Settings tabs
 export { AgentsAppearanceTab } from "./settings-tabs/agents-appearance-tab"

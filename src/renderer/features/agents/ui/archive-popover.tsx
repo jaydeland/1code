@@ -23,6 +23,41 @@ import {
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
 
+// GitHub avatar with loading placeholder
+function GitHubAvatar({
+  gitOwner,
+  className = "h-4 w-4",
+}: {
+  gitOwner: string
+  className?: string
+}) {
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [hasError, setHasError] = useState(false)
+
+  const handleLoad = useCallback(() => setIsLoaded(true), [])
+  const handleError = useCallback(() => setHasError(true), [])
+
+  if (hasError) {
+    return <GitHubLogo className={cn(className, "text-muted-foreground flex-shrink-0")} />
+  }
+
+  return (
+    <div className={cn(className, "relative flex-shrink-0")}>
+      {/* Placeholder background while loading */}
+      {!isLoaded && (
+        <div className="absolute inset-0 rounded-sm bg-muted" />
+      )}
+      <img
+        src={`https://github.com/${gitOwner}.png?size=64`}
+        alt={gitOwner}
+        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+    </div>
+  )
+}
+
 // Format relative time - moved outside component to avoid recreation
 const formatTime = (dateInput: Date | string) => {
   const date = dateInput instanceof Date ? dateInput : new Date(dateInput)
@@ -80,9 +115,6 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
   const gitRepo = project?.gitRepo
   const gitProvider = project?.gitProvider
   const isGitHubRepo = gitProvider === "github" && !!gitOwner
-  const avatarUrl = isGitHubRepo
-    ? `https://github.com/${gitOwner}.png?size=64`
-    : null
 
   const repoName = gitRepo || project?.name
   const displayText = branch
@@ -119,23 +151,8 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
       <div className="flex items-start gap-2.5">
         {showIcon && (
           <div className="pt-0.5">
-            {isGitHubRepo ? (
-              avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={gitOwner || "GitHub"}
-                  className="h-4 w-4 rounded-sm flex-shrink-0"
-                />
-              ) : (
-                <GitHubLogo
-                  className={cn(
-                    "h-4 w-4 flex-shrink-0 transition-colors duration-75",
-                    isSelected
-                      ? "text-foreground"
-                      : "text-muted-foreground",
-                  )}
-                />
-              )
+            {isGitHubRepo && gitOwner ? (
+              <GitHubAvatar gitOwner={gitOwner} />
             ) : (
               <GitHubLogo
                 className={cn(

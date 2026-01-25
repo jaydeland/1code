@@ -12,6 +12,8 @@ const useClerk = () => ({ signOut: () => {} })
 import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
+  selectedDraftIdAtom,
+  showNewChatFormAtom,
   agentsMobileViewModeAtom,
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
@@ -26,6 +28,7 @@ import {
   ctrlTabTargetAtom,
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
+import { KanbanView } from "../../kanban"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
@@ -33,7 +36,7 @@ import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
 import { AgentPreview } from "./agent-preview"
 import { AgentDiffView } from "./agent-diff-view"
-import { TerminalSidebar, terminalSidebarOpenAtom } from "../../terminal"
+import { TerminalSidebar, terminalSidebarOpenAtomFamily } from "../../terminal"
 import {
   useAgentSubChatStore,
   type SubChatMeta,
@@ -56,18 +59,35 @@ const useIsAdmin = () => false
 // Main Component
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
+<<<<<<< HEAD
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
 
+=======
+  const selectedDraftId = useAtomValue(selectedDraftIdAtom)
+  const showNewChatForm = useAtomValue(showNewChatFormAtom)
+>>>>>>> upstream/main
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [previewSidebarOpen, setPreviewSidebarOpen] = useAtom(
     agentsPreviewSidebarOpenAtom,
   )
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
+<<<<<<< HEAD
   const setTerminalSidebarOpen = useSetAtom(terminalSidebarOpenAtom)
+=======
+  const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
+    agentsSubChatsSidebarModeAtom,
+  )
+  // Per-chat terminal sidebar state
+  const terminalSidebarAtom = useMemo(
+    () => terminalSidebarOpenAtomFamily(selectedChatId || ""),
+    [selectedChatId],
+  )
+  const setTerminalSidebarOpen = useSetAtom(terminalSidebarAtom)
+>>>>>>> upstream/main
 
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -125,6 +145,19 @@ export function AgentsContent() {
       setActiveSubChat: state.setActiveSubChat,
     }))
   )
+
+  // Update window title when active sub-chat changes
+  const activeSubChatName = useMemo(() => {
+    if (!activeSubChatId) return null
+    const subChat = allSubChats.find((sc) => sc.id === activeSubChatId)
+    return subChat?.name ?? null
+  }, [activeSubChatId, allSubChats])
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.desktopApi?.setWindowTitle) {
+      window.desktopApi.setWindowTitle(activeSubChatName || "")
+    }
+  }, [activeSubChatName])
 
   // Fetch teams for header
   const { data: teams } = api.teams.getUserTeams.useQuery(undefined, {
@@ -224,7 +257,7 @@ export function AgentsContent() {
   }, [isMobile, selectedChatId, mobileViewMode, setMobileViewMode])
 
   // On mobile: when in terminal mode, sync with terminal sidebar close
-  const terminalSidebarOpen = useAtomValue(terminalSidebarOpenAtom)
+  const terminalSidebarOpen = useAtomValue(terminalSidebarAtom)
   useEffect(() => {
     // If terminal sidebar closed while in terminal mode, go back to chat
     if (isMobile && mobileViewMode === "terminal" && !terminalSidebarOpen) {
@@ -842,6 +875,7 @@ export function AgentsContent() {
           className="flex-1 min-w-0 overflow-hidden"
           style={{ minWidth: "350px" }}
         >
+<<<<<<< HEAD
           {/* Show appropriate content based on selected sidebar tab */}
           {selectedSidebarTab === "chats" ? (
             // Workspaces tab - show chat view
@@ -868,7 +902,25 @@ export function AgentsContent() {
                   Select an item from the {selectedSidebarTab} list to view details
                 </p>
               </div>
+=======
+          {selectedChatId ? (
+            <div className="h-full flex flex-col relative overflow-hidden">
+              <ChatView
+                key={selectedChatId}
+                chatId={selectedChatId}
+                isSidebarOpen={sidebarOpen}
+                onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+                selectedTeamName={selectedTeam?.name}
+                selectedTeamImageUrl={selectedTeam?.image_url}
+              />
             </div>
+          ) : selectedDraftId || showNewChatForm ? (
+            <div className="h-full flex flex-col relative overflow-hidden">
+              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
+>>>>>>> upstream/main
+            </div>
+          ) : (
+            <KanbanView />
           )}
         </div>
       </div>

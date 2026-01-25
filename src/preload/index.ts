@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 import { exposeElectronTRPC } from "trpc-electron/main"
 
 // Only initialize Sentry in production to avoid IPC errors in dev mode
@@ -10,6 +10,11 @@ if (process.env.NODE_ENV === "production") {
 
 // Expose tRPC IPC bridge for type-safe communication
 exposeElectronTRPC()
+
+// Expose webUtils for file path access in drag and drop
+contextBridge.exposeInMainWorld("webUtils", {
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+})
 
 // Expose analytics force flag for testing
 if (process.env.FORCE_ANALYTICS === "true") {
@@ -25,7 +30,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
   isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
 
   // Auto-update methods
-  checkForUpdates: () => ipcRenderer.invoke("update:check"),
+  checkForUpdates: (force?: boolean) => ipcRenderer.invoke("update:check", force),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
 
@@ -99,8 +104,13 @@ contextBridge.exposeInMainWorld("desktopApi", {
   zoomReset: () => ipcRenderer.invoke("window:zoom-reset"),
   getZoom: () => ipcRenderer.invoke("window:get-zoom"),
 
+  // Multi-window
+  newWindow: (options?: { chatId?: string; subChatId?: string }) => ipcRenderer.invoke("window:new", options),
+  setWindowTitle: (title: string) => ipcRenderer.invoke("window:set-title", title),
+
   // DevTools
   toggleDevTools: () => ipcRenderer.invoke("window:toggle-devtools"),
+  unlockDevTools: () => ipcRenderer.invoke("window:unlock-devtools"),
 
   // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
@@ -150,6 +160,10 @@ contextBridge.exposeInMainWorld("desktopApi", {
   // Subscribe to git watcher for a worktree (from renderer)
   subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
   unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
+
+  // VS Code theme scanning
+  scanVSCodeThemes: () => ipcRenderer.invoke("vscode:scan-themes"),
+  loadVSCodeTheme: (themePath: string) => ipcRenderer.invoke("vscode:load-theme", themePath),
 })
 
 // Type definitions
@@ -163,6 +177,30 @@ export interface UpdateProgress {
   bytesPerSecond: number
   transferred: number
   total: number
+}
+
+export type EditorSource = "vscode" | "vscode-insiders" | "cursor" | "windsurf"
+
+export interface DiscoveredTheme {
+  id: string
+  name: string
+  type: "light" | "dark"
+  extensionId: string
+  extensionName: string
+  path: string
+  source: EditorSource
+}
+
+export interface VSCodeThemeData {
+  id: string
+  name: string
+  type: "light" | "dark"
+  colors: Record<string, string>
+  tokenColors?: any[]
+  semanticHighlighting?: boolean
+  semanticTokenColors?: Record<string, any>
+  source: "imported"
+  path: string
 }
 
 export interface DesktopApi {
@@ -198,7 +236,11 @@ export interface DesktopApi {
   zoomOut: () => Promise<void>
   zoomReset: () => Promise<void>
   getZoom: () => Promise<number>
+  // Multi-window
+  newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<void>
+  setWindowTitle: (title: string) => Promise<void>
   toggleDevTools: () => Promise<void>
+  unlockDevTools: () => Promise<void>
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
@@ -223,10 +265,16 @@ export interface DesktopApi {
   onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
   subscribeToGitWatcher: (worktreePath: string) => Promise<void>
   unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
+  // VS Code theme scanning
+  scanVSCodeThemes: () => Promise<DiscoveredTheme[]>
+  loadVSCodeTheme: (themePath: string) => Promise<VSCodeThemeData>
 }
 
 declare global {
   interface Window {
     desktopApi: DesktopApi
+    webUtils: {
+      getPathForFile: (file: File) => string
+    }
   }
 }

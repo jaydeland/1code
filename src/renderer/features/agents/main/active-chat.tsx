@@ -71,13 +71,15 @@ import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { BUILTIN_SLASH_COMMANDS } from "../commands"
 import { isDesktopApp } from "../../../lib/utils/platform"
+import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { ChangesPanel } from "../../changes"
 import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
 import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
-import { terminalSidebarOpenAtom } from "../../terminal/atoms"
+import { terminalSidebarOpenAtomFamily } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import { sessionFlowSidebarOpenAtom } from "../../session-flow/atoms"
 import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
@@ -87,6 +89,7 @@ import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
   agentsDiffSidebarWidthAtom,
+  agentsPlanSidebarWidthAtom,
   agentsPreviewSidebarOpenAtom,
   agentsPreviewSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
@@ -94,25 +97,30 @@ import {
   agentsUnseenChangesAtom,
   clearLoading,
   compactingSubChatsAtom,
+  currentPlanPathAtomFamily,
   diffSidebarOpenAtomFamily,
   diffViewDisplayModeAtom,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
-  selectedDiffFilePathAtom,
   isPlanModeAtom,
   justCreatedIdsAtom,
   lastSelectedModelIdAtom,
   loadingSubChatsAtom,
   pendingAuthRetryMessageAtom,
   pendingConflictResolutionMessageAtom,
+  pendingBuildPlanSubChatIdAtom,
   pendingPlanApprovalsAtom,
+  planEditRefetchTriggerAtomFamily,
+  workspaceDiffCacheAtomFamily,
   pendingPrMessageAtom,
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
+  planSidebarOpenAtomFamily,
   QUESTIONS_SKIPPED_MESSAGE,
   selectedAgentChatIdAtom,
   selectedCommitAtom,
+  selectedDiffFilePathAtom,
   setLoading,
   subChatFilesAtom,
   undoStackAtom,
@@ -120,6 +128,7 @@ import {
 } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { PreviewSetupHoverCard } from "../components/preview-setup-hover-card"
+import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
@@ -127,6 +136,7 @@ import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { useHaptic } from "../hooks/use-haptic"
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
+import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import {
   clearSubChatDraft,
@@ -141,8 +151,8 @@ import {
   toQueuedTextContext,
 } from "../lib/queue-utils"
 import {
-  type AgentsMentionsEditorHandle,
   MENTION_PREFIXES,
+  type AgentsMentionsEditorHandle,
 } from "../mentions"
 import {
   ChatSearchBar,
@@ -164,24 +174,30 @@ import {
   type AgentDiffViewRef,
   type ParsedDiffFile,
 } from "../ui/agent-diff-view"
+import { AgentPlanSidebar } from "../ui/agent-plan-sidebar"
 import { AgentPreview } from "../ui/agent-preview"
 import { AgentQueueIndicator } from "../ui/agent-queue-indicator"
 import { AgentToolCall } from "../ui/agent-tool-call"
 import { AgentToolRegistry } from "../ui/agent-tool-registry"
+import { isPlanFile } from "../ui/agent-tool-utils"
 import { AgentUserMessageBubble } from "../ui/agent-user-message-bubble"
 import { AgentUserQuestion, type AgentUserQuestionHandle } from "../ui/agent-user-question"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { ChatTitleEditor } from "../ui/chat-title-editor"
 import { MobileChatHeader } from "../ui/mobile-chat-header"
+import { QuickCommentInput } from "../ui/quick-comment-input"
 import { SubChatSelector } from "../ui/sub-chat-selector"
 import { SubChatStatusCard } from "../ui/sub-chat-status-card"
 import { TextSelectionPopover } from "../ui/text-selection-popover"
-import { QuickCommentInput } from "../ui/quick-comment-input"
-import type { TextSelectionSource } from "../context/text-selection-context"
 import { autoRenameAgentChat } from "../utils/auto-rename"
 import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
+import { DetailsSidebar } from "../../details-sidebar/details-sidebar"
+import {
+  detailsSidebarOpenAtom,
+  unifiedSidebarEnabledAtom,
+} from "../../details-sidebar/atoms"
 const clearSubChatSelectionAtom = atom(null, () => {})
 const isSubChatMultiSelectModeAtom = atom(false)
 const selectedSubChatIdsAtom = atom(new Set<string>())
@@ -1612,7 +1628,7 @@ interface DiffSidebarRendererProps {
   isDesktop: boolean
   isFullscreen: boolean
   setDiffDisplayMode: (mode: "side-peek" | "center-peek" | "full-page") => void
-  handleCommitToPr: () => void
+  handleCommitToPr: (selectedPaths?: string[]) => void
   isCommittingToPr: boolean
   subChatsWithFiles: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
   setDiffStats: (stats: { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }) => void
@@ -1920,15 +1936,17 @@ const ChatViewInner = memo(function ChatViewInner({
     prevScrollTopRef.current = currentScrollTop
 
     // Ignore scroll events during initialization (content loading)
-    if (isAutoScrollingRef.current || isInitializingScrollRef.current) return
+    if (isInitializingScrollRef.current) return
 
     // If user scrolls UP - disable auto-scroll immediately
-    // BUT keep large padding (user wants to keep the clean slate UX)
+    // This works even during auto-scroll animation (user intent takes priority)
     if (currentScrollTop < prevScrollTop) {
-      console.log("[handleScroll] User scrolled UP - disabling auto-scroll only")
       shouldAutoScrollRef.current = false
       return
     }
+
+    // Ignore other scroll direction checks during auto-scroll animation
+    if (isAutoScrollingRef.current) return
 
     // If user scrolls DOWN and reaches bottom - enable auto-scroll
     shouldAutoScrollRef.current = isAtBottom()
@@ -2076,10 +2094,31 @@ const ChatViewInner = memo(function ChatViewInner({
   // Caches are only cleared on unmount (when tab is evicted from keep-alive pool).
 
   // Cleanup message caches on unmount (when tab is evicted from keep-alive)
+  // CRITICAL: Use a delayed cleanup to avoid clearing caches during temporary unmount/remount
+  // (e.g., React StrictMode, HMR, or parent re-render causing component remount)
   useEffect(() => {
     const currentSubChatId = subChatId
     return () => {
-      clearSubChatCaches(currentSubChatId)
+      // Delay cache clearing to allow remount to happen first
+      // If the component remounts with the same subChatId, the sync will repopulate the atoms
+      // If it truly unmounts, the timeout will clear the caches
+      const timeoutId = setTimeout(() => {
+        clearSubChatCaches(currentSubChatId)
+      }, 100)
+
+      // Store the timeout so it can be cancelled if the component remounts
+      // We use a global map to track pending cleanups
+      ;(window as any).__pendingCacheCleanups = (window as any).__pendingCacheCleanups || new Map()
+      ;(window as any).__pendingCacheCleanups.set(currentSubChatId, timeoutId)
+    }
+  }, [subChatId])
+
+  // Cancel pending cleanup if we remount with the same subChatId
+  useEffect(() => {
+    const pendingCleanups = (window as any).__pendingCacheCleanups as Map<string, number> | undefined
+    if (pendingCleanups?.has(subChatId)) {
+      clearTimeout(pendingCleanups.get(subChatId))
+      pendingCleanups.delete(subChatId)
     }
   }, [subChatId])
 
@@ -2137,6 +2176,30 @@ const ChatViewInner = memo(function ChatViewInner({
     setTextContextsFromDraft,
     setDiffTextContextsFromDraft,
   } = useTextContextSelection()
+
+  // Pasted text files (large pasted text saved as files)
+  const {
+    pastedTexts,
+    addPastedText,
+    removePastedText,
+    clearPastedTexts,
+    pastedTextsRef,
+  } = usePastedTextFiles(subChatId)
+
+  // File contents cache - stores content for file mentions (keyed by mentionId)
+  // This content gets added to the prompt when sending, without showing a separate card
+  const fileContentsRef = useRef<Map<string, string>>(new Map())
+  const cacheFileContent = useCallback((mentionId: string, content: string) => {
+    fileContentsRef.current.set(mentionId, content)
+  }, [])
+  const clearFileContents = useCallback(() => {
+    fileContentsRef.current.clear()
+  }, [])
+
+  // Clear file contents cache when switching subChats to prevent stale data
+  useEffect(() => {
+    fileContentsRef.current.clear()
+  }, [subChatId])
 
   // Quick comment state
   const [quickCommentState, setQuickCommentState] = useState<{
@@ -2277,6 +2340,9 @@ const ChatViewInner = memo(function ChatViewInner({
     } else if (source.type === "tool-edit") {
       // Tool edit selections are treated as code selections (similar to diff)
       addDiffTextContext(text, source.filePath)
+    } else if (source.type === "plan") {
+      // Plan selections are treated as code selections (similar to diff)
+      addDiffTextContext(text, source.planPath)
     }
   }, [addTextContextOriginal, addDiffTextContext])
 
@@ -2403,6 +2469,11 @@ const ChatViewInner = memo(function ChatViewInner({
       })
     }
   }, [pendingConflictMessage, isStreaming, sendMessage, setPendingConflictMessage])
+
+  // Handle pending "Build plan" from sidebar (atom - effect is defined after handleApprovePlan)
+  const [pendingBuildPlanSubChatId, setPendingBuildPlanSubChatId] = useAtom(
+    pendingBuildPlanSubChatIdAtom,
+  )
 
   // Pending user questions from AskUserQuestion tool
   const [pendingQuestionsMap, setPendingQuestionsMap] = useAtom(
@@ -2756,6 +2827,14 @@ const ChatViewInner = memo(function ChatViewInner({
     // Update store mode synchronously BEFORE sending (transport reads from store)
     useAgentSubChatStore.getState().updateSubChatMode(subChatId, "agent")
 
+    // Sync mode to database for sidebar indicator (getPendingPlanApprovals)
+    if (!subChatId.startsWith("temp-")) {
+      updateSubChatModeMutation.mutate({ subChatId, mode: "agent" })
+    }
+
+    // Update ref BEFORE setIsPlanMode to prevent useEffect from triggering duplicate mutation
+    lastIsPlanModeRef.current = false
+
     // Update React state (for UI)
     setIsPlanMode(false)
 
@@ -2768,7 +2847,16 @@ const ChatViewInner = memo(function ChatViewInner({
       role: "user",
       parts: [{ type: "text", text: "Build plan" }],
     })
-  }, [subChatId, setIsPlanMode, scrollToBottom])
+  }, [subChatId, setIsPlanMode, scrollToBottom, updateSubChatModeMutation])
+
+  // Handle pending "Build plan" from sidebar
+  useEffect(() => {
+    // Only trigger if this is the target sub-chat and we're active
+    if (pendingBuildPlanSubChatId === subChatId && isActive) {
+      setPendingBuildPlanSubChatId(null) // Clear immediately to prevent double-trigger
+      handleApprovePlan()
+    }
+  }, [pendingBuildPlanSubChatId, subChatId, isActive, setPendingBuildPlanSubChatId, handleApprovePlan])
 
   // Detect PR URLs in assistant messages and store them
   // Initialize with existing PR URL to prevent duplicate toast on re-mount
@@ -2813,6 +2901,37 @@ const ChatViewInner = memo(function ChatViewInner({
       }
     }
   }, [messages, isStreaming, parentChatId])
+
+  // Track plan Edit completions to trigger sidebar refetch
+  const triggerPlanEditRefetch = useSetAtom(
+    useMemo(() => planEditRefetchTriggerAtomFamily(subChatId), [subChatId])
+  )
+  const lastPlanEditCountRef = useRef(0)
+
+  useEffect(() => {
+    // Count completed plan Edits
+    let completedPlanEdits = 0
+    for (const msg of messages) {
+      if (msg.role !== "assistant" || !(msg as any).parts) continue
+      for (const part of (msg as any).parts as any[]) {
+        if (
+          part.type === "tool-Edit" &&
+          part.state !== "input-streaming" &&
+          part.state !== "pending" &&
+          isPlanFile(part.input?.file_path || "")
+        ) {
+          completedPlanEdits++
+        }
+      }
+    }
+
+    // Trigger refetch if count increased (new Edit completed)
+    if (completedPlanEdits > lastPlanEditCountRef.current) {
+      lastPlanEditCountRef.current = completedPlanEdits
+      triggerPlanEditRefetch()
+    }
+  }, [messages, triggerPlanEditRefetch])
+
   const { changedFiles: changedFilesForSubChat, recomputeChangedFiles } = useChangedFilesTracking(
     messages,
     subChatId,
@@ -3145,11 +3264,13 @@ const ChatViewInner = memo(function ChatViewInner({
     const currentImages = imagesRef.current
     const currentFiles = filesRef.current
     const currentTextContexts = textContextsRef.current
+    const currentPastedTexts = pastedTextsRef.current
     const hasImages =
       currentImages.filter((img) => !img.isLoading && img.url).length > 0
     const hasTextContexts = currentTextContexts.length > 0
+    const hasPastedTexts = currentPastedTexts.length > 0
 
-    if (!hasText && !hasImages && !hasTextContexts) return
+    if (!hasText && !hasImages && !hasTextContexts && !hasPastedTexts) return
 
     // If streaming, add to queue instead of sending directly
     if (isStreamingRef.current) {
@@ -3186,6 +3307,36 @@ const ChatViewInner = memo(function ChatViewInner({
     }
 
     const text = inputValue.trim()
+
+    // Expand custom slash commands with arguments (e.g. "/Apex my argument")
+    // This mirrors the logic in new-chat-form.tsx
+    let finalText = text
+    const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
+    if (slashMatch) {
+      const [, commandName, args] = slashMatch
+      const builtinNames = new Set(
+        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
+      )
+      if (!builtinNames.has(commandName)) {
+        try {
+          const commands = await trpcClient.commands.list.query({
+            projectPath,
+          })
+          const cmd = commands.find(
+            (c) => c.name.toLowerCase() === commandName.toLowerCase(),
+          )
+          if (cmd) {
+            const { content } = await trpcClient.commands.getContent.query({
+              path: cmd.path,
+            })
+            finalText = content.replace(/\$ARGUMENTS/g, args.trim())
+          }
+        } catch (error) {
+          console.error("Failed to expand custom slash command:", error)
+        }
+      }
+    }
+
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
     if (parentChatId) {
@@ -3195,14 +3346,14 @@ const ChatViewInner = memo(function ChatViewInner({
     // Track message sent
     trackMessageSent({
       workspaceId: subChatId,
-      messageLength: text.length,
+      messageLength: finalText.length,
       mode: isPlanModeRef.current ? "plan" : "agent",
     })
 
     // Trigger auto-rename on first message in a new sub-chat
     if (messagesLengthRef.current === 0 && !hasTriggeredRenameRef.current) {
       hasTriggeredRenameRef.current = true
-      onAutoRename(text || "Image message", subChatId)
+      onAutoRename(finalText || "Image message", subChatId)
     }
 
     // Build message parts: images first, then files, then text
@@ -3236,7 +3387,7 @@ const ChatViewInner = memo(function ChatViewInner({
     const currentDiffTextContexts = diffTextContextsRef.current
     let mentionPrefix = ""
 
-    if (currentTextContexts.length > 0 || currentDiffTextContexts.length > 0) {
+    if (currentTextContexts.length > 0 || currentDiffTextContexts.length > 0 || currentPastedTexts.length > 0) {
       const quoteMentions = currentTextContexts.map((tc) => {
         const preview = tc.preview.replace(/[:\[\]]/g, "") // Sanitize preview
         const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
@@ -3250,16 +3401,40 @@ const ChatViewInner = memo(function ChatViewInner({
         return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
       })
 
-      mentionPrefix = [...quoteMentions, ...diffMentions].join(" ") + " "
+      // Add pasted text as pasted mentions (format: pasted:size:preview|filepath)
+      // Using | as separator since filepath can contain colons
+      const pastedTextMentions = currentPastedTexts.map((pt) => {
+        // Sanitize preview to remove special characters that break mention parsing
+        const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
+        return `@[${MENTION_PREFIXES.PASTED}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
+      })
+
+      mentionPrefix = [...quoteMentions, ...diffMentions, ...pastedTextMentions].join(" ") + " "
     }
 
-    if (text || mentionPrefix) {
-      parts.push({ type: "text", text: mentionPrefix + (text || "") })
+    if (finalText || mentionPrefix) {
+      parts.push({ type: "text", text: mentionPrefix + (finalText || "") })
+    }
+
+    // Add cached file contents as hidden parts (sent to agent but not displayed in UI)
+    // These are from dropped text files - content is embedded so agent sees it immediately
+    if (fileContentsRef.current.size > 0) {
+      for (const [mentionId, content] of fileContentsRef.current.entries()) {
+        // Extract file path from mentionId (file:local:path or file:external:path)
+        const filePath = mentionId.replace(/^file:(local|external):/, "")
+        parts.push({
+          type: "file-content",
+          filePath,
+          content,
+        })
+      }
     }
 
     clearAll()
     clearTextContexts()
     clearDiffTextContexts()
+    clearPastedTexts()
+    clearFileContents()
 
     // Optimistic update: immediately update chat's updated_at and resort array for instant sidebar resorting
     if (teamId) {
@@ -3320,6 +3495,7 @@ const ChatViewInner = memo(function ChatViewInner({
     onAutoRename,
     clearAll,
     clearTextContexts,
+    clearPastedTexts,
     teamId,
     addToQueue,
   ])
@@ -3329,11 +3505,17 @@ const ChatViewInner = memo(function ChatViewInner({
     const item = popItemFromQueue(subChatId, itemId)
     if (!item) return
 
-    // Stop current stream if streaming
+    // Stop current stream if streaming and wait for status to become ready
     if (isStreamingRef.current) {
       await handleStop()
-      // Small delay to ensure stop completes
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      // Wait for status to become "ready" (max 2 seconds)
+      const maxWait = 2000
+      const pollInterval = 50
+      let waited = 0
+      while (isStreamingRef.current && waited < maxWait) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval))
+        waited += pollInterval
+      }
     }
 
     // Build message parts from queued item
@@ -3422,11 +3604,17 @@ const ChatViewInner = memo(function ChatViewInner({
 
     if (!hasText && !hasImages) return
 
-    // Stop current stream if streaming
+    // Stop current stream if streaming and wait for status to become ready
     if (isStreamingRef.current) {
       await handleStop()
-      // Small delay to ensure stop completes
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      // Wait for status to become "ready" (max 2 seconds)
+      const maxWait = 2000
+      const pollInterval = 50
+      let waited = 0
+      while (isStreamingRef.current && waited < maxWait) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval))
+        waited += pollInterval
+      }
     }
 
     // Auto-restore archived workspace when sending a message
@@ -3435,6 +3623,35 @@ const ChatViewInner = memo(function ChatViewInner({
     }
 
     const text = inputValue.trim()
+
+    // Expand custom slash commands with arguments (e.g. "/Apex my argument")
+    let finalText = text
+    const slashMatch = text.match(/^\/(\S+)\s*(.*)$/s)
+    if (slashMatch) {
+      const [, commandName, args] = slashMatch
+      const builtinNames = new Set(
+        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
+      )
+      if (!builtinNames.has(commandName)) {
+        try {
+          const commands = await trpcClient.commands.list.query({
+            projectPath,
+          })
+          const cmd = commands.find(
+            (c) => c.name.toLowerCase() === commandName.toLowerCase(),
+          )
+          if (cmd) {
+            const { content } = await trpcClient.commands.getContent.query({
+              path: cmd.path,
+            })
+            finalText = content.replace(/\$ARGUMENTS/g, args.trim())
+          }
+        } catch (error) {
+          console.error("Failed to expand custom slash command:", error)
+        }
+      }
+    }
+
     // Clear editor and draft from localStorage
     editorRef.current?.clear()
     if (parentChatId) {
@@ -3444,7 +3661,7 @@ const ChatViewInner = memo(function ChatViewInner({
     // Track message sent
     trackMessageSent({
       workspaceId: subChatId,
-      messageLength: text.length,
+      messageLength: finalText.length,
       mode: isPlanModeRef.current ? "plan" : "agent",
     })
 
@@ -3474,8 +3691,8 @@ const ChatViewInner = memo(function ChatViewInner({
         })),
     ]
 
-    if (text) {
-      parts.push({ type: "text", text })
+    if (finalText) {
+      parts.push({ type: "text", text: finalText })
     }
 
     // Clear attachments
@@ -3521,33 +3738,28 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }
 
-  // Check if there's an unapproved plan (ExitPlanMode without subsequent "Build plan" or "Implement plan")
+  // Check if there's an unapproved plan (in plan mode with completed ExitPlanMode)
   const hasUnapprovedPlan = useMemo(() => {
-    // Traverse messages from end to find unapproved ExitPlanMode
+    // If already in agent mode, plan is approved (mode is the source of truth)
+    if (!isPlanMode) return false
+
+    // Look for completed ExitPlanMode in messages
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
 
-      // If user message says "Build plan" or "Implement plan", plan is already approved
-      if (msg.role === "user") {
-        const text = msg.parts?.find((p: any) => p.type === "text")?.text || ""
-        const normalizedText = text.trim().toLowerCase()
-        if (normalizedText === "build plan" || normalizedText === "implement plan") {
-          return false
-        }
-      }
-
-      // If assistant message with ExitPlanMode, we found an unapproved plan
-      if (msg.role === "assistant") {
-        const exitPlanPart = msg.parts?.find(
-          (p: any) => p.type === "tool-ExitPlanMode",
+      // If assistant message with completed ExitPlanMode, we found an unapproved plan
+      if (msg.role === "assistant" && msg.parts) {
+        const exitPlanPart = msg.parts.find(
+          (p: any) => p.type === "tool-ExitPlanMode"
         )
-        if (exitPlanPart?.output?.plan) {
+        // Check if ExitPlanMode is completed (has output, even if empty)
+        if (exitPlanPart && exitPlanPart.output !== undefined) {
           return true
         }
       }
     }
     return false
-  }, [messages])
+  }, [messages, isPlanMode])
 
   // Keep ref in sync for use in initializeScroll (which runs in useLayoutEffect)
   hasUnapprovedPlanRef.current = hasUnapprovedPlan
@@ -3555,23 +3767,25 @@ const ChatViewInner = memo(function ChatViewInner({
   // Update pending plan approvals atom for sidebar indicators
   const setPendingPlanApprovals = useSetAtom(pendingPlanApprovalsAtom)
   useEffect(() => {
-    setPendingPlanApprovals((prev: Set<string>) => {
-      const newSet = new Set(prev)
+    setPendingPlanApprovals((prev: Map<string, string>) => {
+      const newMap = new Map(prev)
       if (hasUnapprovedPlan) {
-        newSet.add(subChatId)
+        newMap.set(subChatId, parentChatId)
       } else {
-        newSet.delete(subChatId)
+        newMap.delete(subChatId)
       }
-      // Only return new set if it changed
-      if (newSet.size !== prev.size || ![...newSet].every((id) => prev.has(id))) {
-        return newSet
+      // Only return new map if it changed
+      if (newMap.size !== prev.size || ![...newMap.keys()].every((id) => prev.has(id))) {
+        return newMap
       }
       return prev
     })
-  }, [hasUnapprovedPlan, subChatId, setPendingPlanApprovals])
+  }, [hasUnapprovedPlan, subChatId, parentChatId, setPendingPlanApprovals])
 
   // Keyboard shortcut: Cmd+Enter to approve plan
   useEffect(() => {
+    if (!isActive) return
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.key === "Enter" &&
@@ -3587,7 +3801,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [hasUnapprovedPlan, isStreaming, handleApprovePlan])
+  }, [isActive, hasUnapprovedPlan, isStreaming, handleApprovePlan])
 
   // Cmd/Ctrl + Arrow Down to scroll to bottom (works even when focused in input)
   // But don't intercept if input has content - let native cursor navigation work
@@ -3617,11 +3831,11 @@ const ChatViewInner = memo(function ChatViewInner({
   // Clean up pending plan approval when unmounting
   useEffect(() => {
     return () => {
-      setPendingPlanApprovals((prev: Set<string>) => {
+      setPendingPlanApprovals((prev: Map<string, string>) => {
         if (prev.has(subChatId)) {
-          const newSet = new Set(prev)
-          newSet.delete(subChatId)
-          return newSet
+          const newMap = new Map(prev)
+          newMap.delete(subChatId)
+          return newMap
         }
         return prev
       })
@@ -3709,7 +3923,6 @@ const ChatViewInner = memo(function ChatViewInner({
   const searchBarTopOffset = isSubChatsSidebarOpen ? "52px" : undefined
 
   return (
-    <TextSelectionProvider>
     <SearchHighlightProvider>
       <div className="flex flex-col flex-1 min-h-0 relative">
         {/* Text selection popover for adding text to context */}
@@ -3790,6 +4003,7 @@ const ChatViewInner = memo(function ChatViewInner({
             <IsolatedMessagesSection
               key={subChatId}
               subChatId={subChatId}
+              chatId={parentChatId}
               isMobile={isMobile}
               sandboxSetupStatus={sandboxSetupStatus}
               stickyTopClass={stickyTopClass}
@@ -3859,11 +4073,9 @@ const ChatViewInner = memo(function ChatViewInner({
         onSend={handleSend}
         onForceSend={handleForceSend}
         onStop={handleStop}
-        onApprovePlan={handleApprovePlan}
         onCompact={handleCompact}
         onCreateNewSubChat={onCreateNewSubChat}
         isStreaming={isStreaming}
-        hasUnapprovedPlan={hasUnapprovedPlan}
         isCompacting={isCompacting}
         images={images}
         files={files}
@@ -3875,6 +4087,10 @@ const ChatViewInner = memo(function ChatViewInner({
         onRemoveTextContext={removeTextContext}
         diffTextContexts={diffTextContexts}
         onRemoveDiffTextContext={removeDiffTextContext}
+        pastedTexts={pastedTexts}
+        onAddPastedText={addPastedText}
+        onRemovePastedText={removePastedText}
+        onCacheFileContent={cacheFileContent}
         messageTokenData={messageTokenData}
         subChatId={subChatId}
         parentChatId={parentChatId}
@@ -3901,7 +4117,6 @@ const ChatViewInner = memo(function ChatViewInner({
         />
       </div>
     </SearchHighlightProvider>
-    </TextSelectionProvider>
   )
 })
 
@@ -3946,6 +4161,8 @@ export function ChatView({
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
   const setUndoStack = useSetAtom(undoStackAtom)
+  const setSelectedFilePath = useSetAtom(selectedDiffFilePathAtom)
+  const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
   const { notifyAgentComplete } = useDesktopNotifications()
 
   // Check if any chat has unseen changes
@@ -3960,9 +4177,15 @@ export function ChatView({
     [chatId],
   )
   const [isDiffSidebarOpen, setIsDiffSidebarOpen] = useAtom(diffSidebarAtom)
-  const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(
-    terminalSidebarOpenAtom,
+  // Subscribe to activeSubChatId for plan sidebar (needs to update when switching sub-chats)
+  const activeSubChatIdForPlan = useAgentSubChatStore((state) => state.activeSubChatId)
+
+  // Per-subChat plan sidebar state - each sub-chat remembers its own open/close state
+  const planSidebarAtom = useMemo(
+    () => planSidebarOpenAtomFamily(activeSubChatIdForPlan || ""),
+    [activeSubChatIdForPlan],
   )
+<<<<<<< HEAD
   const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
     sessionFlowSidebarOpenAtom,
   )
@@ -3972,34 +4195,197 @@ export function ChatView({
     deletions: 0,
     isLoading: true,
     hasChanges: false,
+=======
+  const [isPlanSidebarOpen, setIsPlanSidebarOpen] = useAtom(planSidebarAtom)
+  const currentPlanPathAtom = useMemo(
+    () => currentPlanPathAtomFamily(activeSubChatIdForPlan || ""),
+    [activeSubChatIdForPlan],
+  )
+  const [currentPlanPath, setCurrentPlanPath] = useAtom(currentPlanPathAtom)
+
+  // Details sidebar state (unified sidebar that combines all right sidebars)
+  const isUnifiedSidebarEnabled = useAtomValue(unifiedSidebarEnabledAtom)
+  const [isDetailsSidebarOpen, setIsDetailsSidebarOpen] = useAtom(detailsSidebarOpenAtom)
+
+  // Resolved hotkeys for tooltips
+  const toggleDetailsHotkey = useResolvedHotkeyDisplay("toggle-details")
+  const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
+
+  // Close plan sidebar when switching to a sub-chat that has no plan
+  const prevSubChatIdRef = useRef(activeSubChatIdForPlan)
+  useEffect(() => {
+    if (prevSubChatIdRef.current !== activeSubChatIdForPlan) {
+      // Sub-chat changed - if new one has no plan path, close sidebar
+      if (!currentPlanPath) {
+        setIsPlanSidebarOpen(false)
+      }
+      prevSubChatIdRef.current = activeSubChatIdForPlan
+    }
+  }, [activeSubChatIdForPlan, currentPlanPath, setIsPlanSidebarOpen])
+  const setPendingBuildPlanSubChatId = useSetAtom(pendingBuildPlanSubChatIdAtom)
+
+  // Read plan edit refetch trigger from atom (set by ChatViewInner when Edit completes)
+  const planEditRefetchTriggerAtom = useMemo(
+    () => planEditRefetchTriggerAtomFamily(activeSubChatIdForPlan || ""),
+    [activeSubChatIdForPlan],
+  )
+  const planEditRefetchTrigger = useAtomValue(planEditRefetchTriggerAtom)
+
+  // Handler for plan sidebar "Build plan" button
+  // Uses getState() to get fresh activeSubChatId (avoids stale closure)
+  const handleApprovePlanFromSidebar = useCallback(() => {
+    const activeSubChatId = useAgentSubChatStore.getState().activeSubChatId
+    if (activeSubChatId) {
+      setPendingBuildPlanSubChatId(activeSubChatId)
+    }
+  }, [setPendingBuildPlanSubChatId])
+
+  // Per-chat terminal sidebar state - each chat remembers its own open/close state
+  const terminalSidebarAtom = useMemo(
+    () => terminalSidebarOpenAtomFamily(chatId),
+    [chatId],
+  )
+  const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
+
+  // Mutual exclusion: Details sidebar vs Plan/Terminal/Diff(side-peek) sidebars
+  // When one opens, close the conflicting ones and remember for restoration
+
+  // Track what was auto-closed and by whom for restoration
+  const autoClosedStateRef = useRef<{
+    // What closed Details
+    detailsClosedBy: "plan" | "terminal" | "diff" | null
+    // What Details closed
+    planClosedByDetails: boolean
+    terminalClosedByDetails: boolean
+    diffClosedByDetails: boolean
+  }>({
+    detailsClosedBy: null,
+    planClosedByDetails: false,
+    terminalClosedByDetails: false,
+    diffClosedByDetails: false,
+>>>>>>> upstream/main
   })
-  // Smart setter that only updates if values actually changed
+
+  // Track previous states to detect opens/closes
+  const prevSidebarStatesRef = useRef({
+    details: isDetailsSidebarOpen,
+    plan: isPlanSidebarOpen && !!currentPlanPath,
+    terminal: isTerminalSidebarOpen,
+  })
+
+  useEffect(() => {
+    const prev = prevSidebarStatesRef.current
+    const auto = autoClosedStateRef.current
+    const isPlanOpen = isPlanSidebarOpen && !!currentPlanPath
+
+    // Detect state changes
+    const detailsJustOpened = isDetailsSidebarOpen && !prev.details
+    const detailsJustClosed = !isDetailsSidebarOpen && prev.details
+    const planJustOpened = isPlanOpen && !prev.plan
+    const planJustClosed = !isPlanOpen && prev.plan
+    const terminalJustOpened = isTerminalSidebarOpen && !prev.terminal
+    const terminalJustClosed = !isTerminalSidebarOpen && prev.terminal
+
+    // Details opened → close conflicting sidebars and remember
+    if (detailsJustOpened) {
+      if (isPlanOpen) {
+        auto.planClosedByDetails = true
+        setIsPlanSidebarOpen(false)
+      }
+      if (isTerminalSidebarOpen) {
+        auto.terminalClosedByDetails = true
+        setIsTerminalSidebarOpen(false)
+      }
+    }
+    // Details closed → restore what it closed
+    else if (detailsJustClosed) {
+      if (auto.planClosedByDetails) {
+        auto.planClosedByDetails = false
+        setIsPlanSidebarOpen(true)
+      }
+      if (auto.terminalClosedByDetails) {
+        auto.terminalClosedByDetails = false
+        setIsTerminalSidebarOpen(true)
+      }
+    }
+    // Plan opened → close Details and remember
+    else if (planJustOpened && isDetailsSidebarOpen) {
+      auto.detailsClosedBy = "plan"
+      setIsDetailsSidebarOpen(false)
+    }
+    // Plan closed → restore Details if we closed it
+    else if (planJustClosed && auto.detailsClosedBy === "plan") {
+      auto.detailsClosedBy = null
+      setIsDetailsSidebarOpen(true)
+    }
+    // Terminal opened → close Details and remember
+    else if (terminalJustOpened && isDetailsSidebarOpen) {
+      auto.detailsClosedBy = "terminal"
+      setIsDetailsSidebarOpen(false)
+    }
+    // Terminal closed → restore Details if we closed it
+    else if (terminalJustClosed && auto.detailsClosedBy === "terminal") {
+      auto.detailsClosedBy = null
+      setIsDetailsSidebarOpen(true)
+    }
+
+    prevSidebarStatesRef.current = {
+      details: isDetailsSidebarOpen,
+      plan: isPlanOpen,
+      terminal: isTerminalSidebarOpen,
+    }
+  }, [
+    isDetailsSidebarOpen,
+    isPlanSidebarOpen,
+    currentPlanPath,
+    isTerminalSidebarOpen,
+    setIsDetailsSidebarOpen,
+    setIsPlanSidebarOpen,
+    setIsTerminalSidebarOpen,
+  ])
+
+  // Diff data cache - stored in atoms to persist across workspace switches
+  const diffCacheAtom = useMemo(
+    () => workspaceDiffCacheAtomFamily(chatId),
+    [chatId],
+  )
+  const [diffCache, setDiffCache] = useAtom(diffCacheAtom)
+
+  // Extract diff data from cache
+  const diffStats = diffCache.diffStats
+  const parsedFileDiffs = diffCache.parsedFileDiffs as ParsedDiffFile[] | null
+  const prefetchedFileContents = diffCache.prefetchedFileContents
+  const diffContent = diffCache.diffContent
+
+  // Smart setters that update the cache
   const setDiffStats = useCallback((val: any) => {
-    setDiffStatsRaw((prev: typeof diffStats) => {
-      // Handle function updates
-      const newVal = typeof val === 'function' ? val(prev) : val
+    setDiffCache((prev) => {
+      const newVal = typeof val === 'function' ? val(prev.diffStats) : val
       // Only update if something changed
       if (
-        prev.fileCount === newVal.fileCount &&
-        prev.additions === newVal.additions &&
-        prev.deletions === newVal.deletions &&
-        prev.isLoading === newVal.isLoading &&
-        prev.hasChanges === newVal.hasChanges
+        prev.diffStats.fileCount === newVal.fileCount &&
+        prev.diffStats.additions === newVal.additions &&
+        prev.diffStats.deletions === newVal.deletions &&
+        prev.diffStats.isLoading === newVal.isLoading &&
+        prev.diffStats.hasChanges === newVal.hasChanges
       ) {
         return prev // Return same reference to prevent re-render
       }
-      return newVal
+      return { ...prev, diffStats: newVal }
     })
-  }, [])
-  // Store raw diff content to pass to AgentDiffView (avoids double fetch)
-  const [diffContent, setDiffContent] = useState<string | null>(null)
-  // Store pre-parsed file diffs (avoids double parsing in AgentDiffView)
-  // Server returns extended type with fileLang, isNewFile, isDeletedFile
-  const [parsedFileDiffs, setParsedFileDiffs] = useState<ParsedDiffFile[] | null>(null)
-  // Store prefetched file contents for instant diff view opening
-  const [prefetchedFileContents, setPrefetchedFileContents] = useState<
-    Record<string, string>
-  >({})
+  }, [setDiffCache])
+
+  const setParsedFileDiffs = useCallback((files: ParsedDiffFile[] | null) => {
+    setDiffCache((prev) => ({ ...prev, parsedFileDiffs: files as any }))
+  }, [setDiffCache])
+
+  const setPrefetchedFileContents = useCallback((contents: Record<string, string>) => {
+    setDiffCache((prev) => ({ ...prev, prefetchedFileContents: contents }))
+  }, [setDiffCache])
+
+  const setDiffContent = useCallback((content: string | null) => {
+    setDiffCache((prev) => ({ ...prev, diffContent: content }))
+  }, [setDiffCache])
   const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
   const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
@@ -4045,6 +4431,62 @@ export function ChatView({
       appStore.set(agentsDiffSidebarWidthAtom, 400)
     }
   }, [diffDisplayMode])
+
+  // Handle Diff + Details sidebar conflict (side-peek mode only)
+  // - If Diff opens in side-peek while Details is open: switch Diff to center-peek (dialog) mode
+  // - If user manually switches Diff to side-peek while Details is open: close Details and remember
+  // - If Details opens while Diff is in side-peek mode: close Diff and remember
+  const prevDiffStateRef = useRef<{ isOpen: boolean; mode: string; detailsOpen: boolean }>({
+    isOpen: isDiffSidebarOpen,
+    mode: diffDisplayMode,
+    detailsOpen: isDetailsSidebarOpen,
+  })
+  // Flag to skip center-peek switch when restoring Diff after Details closes
+  const isRestoringDiffRef = useRef(false)
+  useEffect(() => {
+    const prev = prevDiffStateRef.current
+    const auto = autoClosedStateRef.current
+    const isNowSidePeek = isDiffSidebarOpen && diffDisplayMode === "side-peek"
+    const wasSidePeek = prev.isOpen && prev.mode === "side-peek"
+    const detailsJustOpened = isDetailsSidebarOpen && !prev.detailsOpen
+    const detailsJustClosed = !isDetailsSidebarOpen && prev.detailsOpen
+    const diffSidePeekJustClosed = wasSidePeek && !isNowSidePeek
+
+    if (isNowSidePeek && isDetailsSidebarOpen) {
+      // Details just opened while Diff is in side-peek → close Diff and remember
+      if (detailsJustOpened) {
+        auto.diffClosedByDetails = true
+        setIsDiffSidebarOpen(false)
+      }
+      // Diff just opened in side-peek mode → switch to dialog (don't close Details)
+      // Skip if we're restoring Diff after Details closed
+      else if (!prev.isOpen && !isRestoringDiffRef.current) {
+        setDiffDisplayMode("center-peek")
+      }
+      // User manually switched to side-peek while Diff was already open → close Details and remember
+      else if (prev.isOpen && prev.mode !== "side-peek") {
+        auto.detailsClosedBy = "diff"
+        setIsDetailsSidebarOpen(false)
+      }
+    }
+    // Diff side-peek closed → restore Details if we closed it
+    else if (diffSidePeekJustClosed && auto.detailsClosedBy === "diff") {
+      auto.detailsClosedBy = null
+      setIsDetailsSidebarOpen(true)
+    }
+    // Details closed → restore Diff if we closed it (in side-peek mode, not switching to dialog)
+    else if (detailsJustClosed && auto.diffClosedByDetails) {
+      auto.diffClosedByDetails = false
+      isRestoringDiffRef.current = true
+      setIsDiffSidebarOpen(true)
+      // Reset flag after state update
+      requestAnimationFrame(() => {
+        isRestoringDiffRef.current = false
+      })
+    }
+
+    prevDiffStateRef.current = { isOpen: isDiffSidebarOpen, mode: diffDisplayMode, detailsOpen: isDetailsSidebarOpen }
+  }, [isDiffSidebarOpen, diffDisplayMode, isDetailsSidebarOpen, setDiffDisplayMode, setIsDetailsSidebarOpen, setIsDiffSidebarOpen])
 
   // Hide traffic lights when full-page diff is open (they would overlap with content)
   useEffect(() => {
@@ -4618,8 +5060,9 @@ export function ChatView({
   }, [chatId, setPendingPrMessage])
 
   // Handle Commit to existing PR - sends a message to Claude to commit and push
+  // selectedPaths parameter is optional - if provided, only those files will be mentioned
   const [isCommittingToPr, setIsCommittingToPr] = useState(false)
-  const handleCommitToPr = useCallback(async () => {
+  const handleCommitToPr = useCallback(async (_selectedPaths?: string[]) => {
     if (!chatId) {
       toast.error("Chat ID is required", { position: "top-center" })
       return
@@ -4850,6 +5293,40 @@ Make sure to preserve all functionality from both branches when resolving confli
       }
     }
   }, [agentChat, chatId])
+
+  // Auto-detect plan path from ACTIVE sub-chat messages when sub-chat changes
+  // This ensures the plan sidebar shows the correct plan for the active sub-chat only
+  useEffect(() => {
+    if (!agentSubChats || agentSubChats.length === 0 || !activeSubChatIdForPlan) {
+      setCurrentPlanPath(null)
+      return
+    }
+
+    // Find the active sub-chat
+    const activeSubChat = agentSubChats.find(sc => sc.id === activeSubChatIdForPlan)
+    if (!activeSubChat) {
+      setCurrentPlanPath(null)
+      return
+    }
+
+    // Find last plan file path from active sub-chat only
+    let lastPlanPath: string | null = null
+    const messages = (activeSubChat.messages as any[]) || []
+    for (const msg of messages) {
+      if (msg.role !== "assistant") continue
+      const parts = msg.parts || []
+      for (const part of parts) {
+        if (
+          part.type === "tool-Write" &&
+          isPlanFile(part.input?.file_path || "")
+        ) {
+          lastPlanPath = part.input.file_path
+        }
+      }
+    }
+
+    setCurrentPlanPath(lastPlanPath)
+  }, [agentSubChats, activeSubChatIdForPlan, setCurrentPlanPath])
 
   // Create or get Chat instance for a sub-chat
   const getOrCreateChat = useCallback(
@@ -5157,6 +5634,10 @@ Make sure to preserve all functionality from both branches when resolving confli
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [handleCreateNewSubChat])
+
+  // NOTE: Desktop notifications for pending questions are now triggered directly
+  // in ipc-chat-transport.ts when the ask-user-question chunk arrives.
+  // This prevents duplicate notifications from multiple ChatView instances.
 
   // Multi-select state for sub-chats (for Cmd+W bulk close)
   const selectedSubChatIds = useAtomValue(selectedSubChatIdsAtom)
@@ -5538,6 +6019,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   // No early return - let the UI render with loading state handled by activeChat check below
 
   return (
+    <TextSelectionProvider>
     <div className="flex h-full flex-col">
       {/* Main content */}
       <div className="flex-1 overflow-hidden flex">
@@ -5597,6 +6079,14 @@ Make sure to preserve all functionality from both branches when resolving confli
                         canOpenPreview={canOpenPreview}
                         onOpenDiff={() => setIsDiffSidebarOpen(true)}
                         canOpenDiff={canOpenDiff}
+<<<<<<< HEAD
+=======
+                        isDiffSidebarOpen={isDiffSidebarOpen}
+                        diffStats={diffStats}
+                        onOpenTerminal={() => setIsTerminalSidebarOpen(true)}
+                        canOpenTerminal={!!worktreePath}
+                        chatId={chatId}
+>>>>>>> upstream/main
                       />
                     </>
                   )}
@@ -5635,7 +6125,57 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </span>
                     </PreviewSetupHoverCard>
                   ))}
+<<<<<<< HEAD
                 {/* Terminal and Session Flow buttons moved to right icon bar */}
+=======
+                {/* Overview/Terminal Button - shows when sidebar is closed and worktree exists (desktop only) */}
+                {!isMobileFullscreen &&
+                  worktreePath && (
+                    isUnifiedSidebarEnabled ? (
+                      // Details button for unified sidebar
+                      !isDetailsSidebarOpen && (
+                        <Tooltip delayDuration={500}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setIsDetailsSidebarOpen(true)}
+                              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                              aria-label="View details"
+                            >
+                              <IconOpenSidebarRight className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            View details
+                            {toggleDetailsHotkey && <Kbd>{toggleDetailsHotkey}</Kbd>}
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    ) : (
+                      // Terminal button for legacy sidebars
+                      !isTerminalSidebarOpen && (
+                        <Tooltip delayDuration={500}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setIsTerminalSidebarOpen(true)}
+                              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                              aria-label="Open terminal"
+                            >
+                              <TerminalSquare className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            Open terminal
+                            {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    )
+                  )}
+>>>>>>> upstream/main
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
                   <Tooltip delayDuration={500}>
@@ -5794,6 +6334,33 @@ Make sure to preserve all functionality from both branches when resolving confli
           )}
         </div>
 
+        {/* Plan Sidebar - shows plan files on the right (leftmost right sidebar) */}
+        {/* Only show when we have an active sub-chat with a plan */}
+        {!isMobileFullscreen && activeSubChatIdForPlan && (
+          <ResizableSidebar
+            isOpen={isPlanSidebarOpen && !!currentPlanPath}
+            onClose={() => setIsPlanSidebarOpen(false)}
+            widthAtom={agentsPlanSidebarWidthAtom}
+            minWidth={400}
+            maxWidth={800}
+            side="right"
+            animationDuration={0}
+            initialWidth={0}
+            exitWidth={0}
+            showResizeTooltip={true}
+            className="bg-tl-background border-l"
+            style={{ borderLeftWidth: "0.5px" }}
+          >
+            <AgentPlanSidebar
+              chatId={activeSubChatIdForPlan}
+              planPath={currentPlanPath}
+              onClose={() => setIsPlanSidebarOpen(false)}
+              onBuildPlan={handleApprovePlanFromSidebar}
+              refetchTrigger={planEditRefetchTrigger}
+            />
+          </ResizableSidebar>
+        )}
+
         {/* Diff View - hidden on mobile fullscreen and when diff is not available */}
         {/* Supports three display modes: side-peek (sidebar), center-peek (dialog), full-page */}
         {/* Wrapped in DiffStateProvider to isolate diff state and prevent ChatView re-renders */}
@@ -5924,6 +6491,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           </ResizableSidebar>
         )}
 
+<<<<<<< HEAD
         {/* Terminal Sidebar - always available with smart default directory */}
         <TerminalSidebar
           chatId={chatId}
@@ -5939,7 +6507,52 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Session Flow Full Screen - full screen view */}
         <SessionFlowFullScreen onScrollToMessage={handleScrollToMessage} />
+=======
+        {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
+        {worktreePath && (
+          <TerminalSidebar
+            chatId={chatId}
+            cwd={worktreePath}
+            workspaceId={chatId}
+          />
+        )}
+
+        {/* Unified Details Sidebar - combines all right sidebars into one (rightmost) */}
+        {isUnifiedSidebarEnabled && !isMobileFullscreen && worktreePath && (
+          <DetailsSidebar
+            chatId={chatId}
+            worktreePath={worktreePath}
+            planPath={currentPlanPath}
+            isPlanMode={isPlanMode}
+            onBuildPlan={handleApprovePlanFromSidebar}
+            planRefetchTrigger={planEditRefetchTrigger}
+            activeSubChatId={activeSubChatIdForPlan}
+            isPlanSidebarOpen={isPlanSidebarOpen && !!currentPlanPath}
+            isTerminalSidebarOpen={isTerminalSidebarOpen}
+            isDiffSidebarOpen={isDiffSidebarOpen}
+            diffDisplayMode={diffDisplayMode}
+            canOpenDiff={canOpenDiff}
+            setIsDiffSidebarOpen={setIsDiffSidebarOpen}
+            diffStats={diffStats}
+            parsedFileDiffs={parsedFileDiffs}
+            onCommit={handleCommitToPr}
+            isCommitting={isCommittingToPr}
+            onExpandTerminal={() => setIsTerminalSidebarOpen(true)}
+            onExpandPlan={() => setIsPlanSidebarOpen(true)}
+            onExpandDiff={() => setIsDiffSidebarOpen(true)}
+            onFileSelect={(filePath) => {
+              // Set the selected file path
+              setSelectedFilePath(filePath)
+              // Set filtered files to just this file
+              setFilteredDiffFiles([filePath])
+              // Open the diff sidebar
+              setIsDiffSidebarOpen(true)
+            }}
+          />
+        )}
+>>>>>>> upstream/main
       </div>
     </div>
+    </TextSelectionProvider>
   )
 }

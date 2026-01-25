@@ -4,6 +4,7 @@ export { TerminalDialog } from "./terminal-dialog"
 export { TerminalSearch } from "./TerminalSearch"
 export {
   terminalSidebarOpenAtom,
+  terminalSidebarOpenAtomFamily,
   terminalSidebarWidthAtom,
   terminalDialogOpenAtom,
   dialogTerminalsAtom,

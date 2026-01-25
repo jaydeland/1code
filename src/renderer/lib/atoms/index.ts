@@ -242,6 +242,14 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
   { getOnInit: true },
 )
 
+// OpenAI API key for voice transcription (for users without paid subscription)
+export const openaiApiKeyAtom = atomWithStorage<string>(
+  "agents:openai-api-key",
+  "",
+  undefined,
+  { getOnInit: true },
+)
+
 // New: Model profiles storage
 export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
   "agents:model-profiles",
@@ -398,6 +406,15 @@ export const betaGitFeaturesEnabledAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Beta: Enable Kanban board view
+// When enabled, shows Kanban button in sidebar to view workspaces as a board
+export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
+  "preferences:beta-kanban-enabled",
+  false, // Default OFF
+  undefined,
+  { getOnInit: true },
+)
+
 // Preferences - Ctrl+Tab Quick Switch Target
 // When "workspaces" (default), Ctrl+Tab switches between workspaces, and Opt+Ctrl+Tab switches between agents
 // When "agents", Ctrl+Tab switches between agents, and Opt+Ctrl+Tab switches between workspaces
@@ -405,6 +422,16 @@ export type CtrlTabTarget = "workspaces" | "agents"
 export const ctrlTabTargetAtom = atomWithStorage<CtrlTabTarget>(
   "preferences:ctrl-tab-target",
   "workspaces", // Default: Ctrl+Tab switches workspaces, Opt+Ctrl+Tab switches agents
+  undefined,
+  { getOnInit: true },
+)
+
+// Preferences - Auto-advance after archive
+// Controls where to navigate after archiving a workspace
+export type AutoAdvanceTarget = "next" | "previous" | "close"
+export const autoAdvanceTargetAtom = atomWithStorage<AutoAdvanceTarget>(
+  "preferences:auto-advance-target",
+  "next", // Default: go to next workspace
   undefined,
   { getOnInit: true },
 )
@@ -488,10 +515,33 @@ export const showWorkspaceIconAtom = atomWithStorage<boolean>(
 )
 
 /**
+ * Always expand to-do list
+ * When enabled, to-do lists are always shown expanded (full list view)
+ * When disabled (default), to-do lists start collapsed and can be expanded manually
+ */
+export const alwaysExpandTodoListAtom = atomWithStorage<boolean>(
+  "preferences:always-expand-todo-list",
+  false, // Collapsed by default
+  undefined,
+  { getOnInit: true },
+)
+
+/**
  * Cached full theme data for the selected theme
  * This is populated when a theme is selected and used for applying CSS variables
  */
 export const fullThemeDataAtom = atom<VSCodeFullTheme | null>(null)
+
+/**
+ * Imported themes from VS Code extensions
+ * Persisted in localStorage, loaded on app start
+ */
+export const importedThemesAtom = atomWithStorage<VSCodeFullTheme[]>(
+  "preferences:imported-themes",
+  [],
+  undefined,
+  { getOnInit: true },
+)
 
 /**
  * All available full themes (built-in + imported + discovered)
@@ -674,6 +724,7 @@ export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
 )
 
 // ============================================
+<<<<<<< HEAD
 // CLUSTERS FEATURE ATOMS
 // ============================================
 
@@ -695,3 +746,11 @@ export const clustersDefaultNamespaceAtom = atomWithStorage<string | null>(
   undefined,
   { getOnInit: true },
 )
+=======
+// DEV TOOLS UNLOCK (Hidden feature)
+// ============================================
+
+// DevTools unlock state (hidden feature - click Beta tab 5 times to enable)
+// Persisted per-session only (not in localStorage for security)
+export const devToolsUnlockedAtom = atom<boolean>(false)
+>>>>>>> upstream/main

@@ -8,6 +8,7 @@ import { Button as ButtonCustom } from "../../components/ui/button"
 import { cn } from "../../lib/utils"
 import { useSetAtom, useAtom, useAtomValue } from "jotai"
 import {
+  autoAdvanceTargetAtom,
   createTeamDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
@@ -22,14 +23,19 @@ import {
   isFullscreenAtom,
   showOfflineModeFeaturesAtom,
   showWorkspaceIconAtom,
+  betaKanbanEnabledAtom,
 } from "../../lib/atoms"
 import { ArchivePopover } from "../agents/ui/archive-popover"
+<<<<<<< HEAD
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
 import { ClustersSidebarSection, selectedClustersCategoryAtom } from "../clusters"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
+=======
+import { ChevronDown, MoreHorizontal, Columns3 } from "lucide-react"
+>>>>>>> upstream/main
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null })
@@ -64,6 +70,9 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from "../../components/ui/context-menu"
 import {
   IconDoubleChevronLeft,
@@ -88,6 +97,7 @@ import {
   selectedAgentChatIdAtom,
   previousAgentChatIdAtom,
   selectedDraftIdAtom,
+  showNewChatFormAtom,
   loadingSubChatsAtom,
   agentsUnseenChangesAtom,
   archivePopoverOpenAtom,
@@ -114,6 +124,7 @@ import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
 import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
+import { useResolvedHotkeyDisplay } from "../../lib/hotkeys"
 import { pluralize } from "../agents/utils/pluralize"
 import { useNewChatDrafts, deleteNewChatDraft, type NewChatDraft } from "../agents/lib/drafts"
 import {
@@ -124,10 +135,46 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
+import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-chat"
 
 // Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
 const FEEDBACK_URL =
   import.meta.env.VITE_FEEDBACK_URL || "https://discord.gg/8ektTZGnj4"
+
+// GitHub avatar with loading placeholder
+const GitHubAvatar = React.memo(function GitHubAvatar({
+  gitOwner,
+  className = "h-4 w-4",
+}: {
+  gitOwner: string
+  className?: string
+}) {
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [hasError, setHasError] = useState(false)
+
+  const handleLoad = useCallback(() => setIsLoaded(true), [])
+  const handleError = useCallback(() => setHasError(true), [])
+
+  if (hasError) {
+    return <GitHubLogo className={cn(className, "text-muted-foreground flex-shrink-0")} />
+  }
+
+  return (
+    <div className={cn(className, "relative flex-shrink-0")}>
+      {/* Placeholder background while loading */}
+      {!isLoaded && (
+        <div className="absolute inset-0 rounded-sm bg-muted" />
+      )}
+      <img
+        src={`https://github.com/${gitOwner}.png?size=64`}
+        alt={gitOwner}
+        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+    </div>
+  )
+})
 
 // Component to render chat icon with loading status
 const ChatIcon = React.memo(function ChatIcon({
@@ -158,13 +205,7 @@ const ChatIcon = React.memo(function ChatIcon({
   // Show GitHub avatar if available, otherwise blank project icon
   const renderMainIcon = () => {
     if (gitOwner && gitProvider === "github") {
-      return (
-        <img
-          src={`https://github.com/${gitOwner}.png?size=64`}
-          alt={gitOwner}
-          className="h-4 w-4 rounded-sm flex-shrink-0"
-        />
-      )
+      return <GitHubAvatar gitOwner={gitOwner} />
     }
     return (
       <GitHubLogo
@@ -327,11 +368,7 @@ const DraftItem = React.memo(function DraftItem({
           <div className="pt-0.5">
             <div className="relative flex-shrink-0 w-4 h-4">
               {projectGitOwner && projectGitProvider === "github" ? (
-                <img
-                  src={`https://github.com/${projectGitOwner}.png?size=64`}
-                  alt={projectGitOwner}
-                  className="h-4 w-4 rounded-sm flex-shrink-0"
-                />
+                <GitHubAvatar gitOwner={projectGitOwner} />
               ) : (
                 <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
               )}
@@ -472,6 +509,9 @@ const AgentChatItem = React.memo(function AgentChatItem({
   formatTime: (dateStr: string) => string
   isJustCreated: boolean
 }) {
+  // Resolved hotkey for context menu
+  const archiveWorkspaceHotkey = useResolvedHotkeyDisplay("archive-workspace")
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -678,10 +718,39 @@ const AgentChatItem = React.memo(function AgentChatItem({
                 Copy branch name
               </ContextMenuItem>
             )}
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>Export workspace</ContextMenuSubTrigger>
+              <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
+                <ContextMenuItem onClick={() => exportChat({ chatId, format: "markdown" })}>
+                  Download as Markdown
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => exportChat({ chatId, format: "json" })}>
+                  Download as JSON
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => exportChat({ chatId, format: "text" })}>
+                  Download as Text
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => copyChat({ chatId, format: "markdown" })}>
+                  Copy as Markdown
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => copyChat({ chatId, format: "json" })}>
+                  Copy as JSON
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => copyChat({ chatId, format: "text" })}>
+                  Copy as Text
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            {isDesktop && (
+              <ContextMenuItem onClick={() => window.desktopApi?.newWindow({ chatId })}>
+                Open in new window
+              </ContextMenuItem>
+            )}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => onArchive(chatId)} className="justify-between">
               Archive workspace
-              <Kbd>{getShortcutKey("archiveAgent")}</Kbd>
+              {archiveWorkspaceHotkey && <Kbd>{archiveWorkspaceHotkey}</Kbd>}
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => onArchiveAllBelow(chatId)}
@@ -955,6 +1024,45 @@ const ArchiveButton = memo(forwardRef<HTMLButtonElement, React.ButtonHTMLAttribu
   }
 ))
 
+// Isolated Kanban Button - clears selection to show Kanban view
+const KanbanButton = memo(function KanbanButton() {
+  const kanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
+
+  // Resolved hotkey for tooltip (respects custom bindings)
+  const openKanbanHotkey = useResolvedHotkeyDisplay("open-kanban")
+
+  const handleClick = useCallback(() => {
+    // Clear selected chat, draft, and new form state to show Kanban view
+    setSelectedChatId(null)
+    setSelectedDraftId(null)
+    setShowNewChatForm(false)
+  }, [setSelectedChatId, setSelectedDraftId, setShowNewChatForm])
+
+  // Hide button if feature is disabled
+  if (!kanbanEnabled) return null
+
+  return (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleClick}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+        >
+          <Columns3 className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        Kanban View
+        {openKanbanHotkey && <Kbd>{openKanbanHotkey}</Kbd>}
+      </TooltipContent>
+    </Tooltip>
+  )
+})
+
 // Isolated Archive Section - subscribes to archivePopoverOpenAtom internally
 // to prevent sidebar re-renders when popover opens/closes
 interface ArchiveSectionProps {
@@ -1033,6 +1141,7 @@ const SidebarHeader = memo(function SidebarHeader({
 }: SidebarHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
+  const toggleSidebarHotkey = useResolvedHotkeyDisplay("toggle-sidebar")
 
   return (
     <div
@@ -1089,7 +1198,7 @@ const SidebarHeader = memo(function SidebarHeader({
             </TooltipTrigger>
             <TooltipContent>
               Close sidebar
-              <Kbd>⌘\</Kbd>
+              {toggleSidebarHotkey && <Kbd>{toggleSidebarHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -1398,9 +1507,14 @@ export function AgentsSidebar({
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
+<<<<<<< HEAD
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
+=======
+  const autoAdvanceTarget = useAtomValue(autoAdvanceTargetAtom)
+>>>>>>> upstream/main
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
   // Use ref instead of state to avoid re-renders on hover
@@ -1438,6 +1552,9 @@ export function AgentsSidebar({
 
   // Haptic feedback
   const { trigger: triggerHaptic } = useHaptic()
+
+  // Resolved hotkey for tooltip
+  const newWorkspaceHotkey = useResolvedHotkeyDisplay("new-workspace")
 
   // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -1585,19 +1702,42 @@ export function AgentsSidebar({
   // Archive chat mutation
   const archiveChatMutation = trpc.chats.archive.useMutation({
     onSuccess: (_, variables) => {
+      // Hide tooltip if visible (element may be removed from DOM before mouseLeave fires)
+      if (agentTooltipTimerRef.current) {
+        clearTimeout(agentTooltipTimerRef.current)
+        agentTooltipTimerRef.current = null
+      }
+      if (agentTooltipRef.current) {
+        agentTooltipRef.current.style.display = "none"
+      }
+
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
 
-      // If archiving the currently selected chat, navigate to previous or new workspace
+      // If archiving the currently selected chat, navigate based on auto-advance setting
       if (selectedChatId === variables.id) {
-        // Check if previous chat is available (exists and not being archived)
-        const isPreviousAvailable = previousChatId &&
-          agentChats?.some((c) => c.id === previousChatId && c.id !== variables.id)
+        const currentIndex = agentChats?.findIndex((c) => c.id === variables.id) ?? -1
 
-        if (isPreviousAvailable) {
-          setSelectedChatId(previousChatId)
+        if (autoAdvanceTarget === "next") {
+          // Find next workspace in list (after current index)
+          const nextChat = agentChats?.find((c, i) => i > currentIndex && c.id !== variables.id)
+          if (nextChat) {
+            setSelectedChatId(nextChat.id)
+          } else {
+            // No next workspace, go to new workspace view
+            setSelectedChatId(null)
+          }
+        } else if (autoAdvanceTarget === "previous") {
+          // Go to previously selected workspace
+          const isPreviousAvailable = previousChatId &&
+            agentChats?.some((c) => c.id === previousChatId && c.id !== variables.id)
+          if (isPreviousAvailable) {
+            setSelectedChatId(previousChatId)
+          } else {
+            setSelectedChatId(null)
+          }
         } else {
-          // Fallback to new workspace view
+          // Close: go to new workspace view
           setSelectedChatId(null)
         }
       }
@@ -1648,6 +1788,15 @@ export function AgentsSidebar({
   // Batch archive mutation
   const archiveChatsBatchMutation = trpc.chats.archiveBatch.useMutation({
     onSuccess: (_, variables) => {
+      // Hide tooltip if visible (element may be removed from DOM before mouseLeave fires)
+      if (agentTooltipTimerRef.current) {
+        clearTimeout(agentTooltipTimerRef.current)
+        agentTooltipTimerRef.current = null
+      }
+      if (agentTooltipRef.current) {
+        agentTooltipRef.current.style.display = "none"
+      }
+
       utils.chats.list.invalidate()
       utils.chats.listArchived.invalidate()
 
@@ -1926,15 +2075,23 @@ export function AgentsSidebar({
       // Navigate to NewChatForm with this draft selected
       setSelectedChatId(null)
       setSelectedDraftId(draftId)
+<<<<<<< HEAD
       // Clear all category selections to show the new chat form
       setSelectedCategory(null)
       setSelectedMcpCategory(null)
       setSelectedClustersCategory(null)
+=======
+      setShowNewChatForm(false) // Clear explicit new chat state when selecting a draft
+>>>>>>> upstream/main
       if (isMobileFullscreen && onChatSelect) {
         onChatSelect()
       }
     },
+<<<<<<< HEAD
     [setSelectedChatId, setSelectedDraftId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect],
+=======
+    [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, isMobileFullscreen, onChatSelect],
+>>>>>>> upstream/main
   )
 
   // Reset focused index when search query changes
@@ -2003,10 +2160,14 @@ export function AgentsSidebar({
     triggerHaptic("light")
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
+<<<<<<< HEAD
     // Clear all category selections to show the new chat form
     setSelectedCategory(null)
     setSelectedMcpCategory(null)
     setSelectedClustersCategory(null)
+=======
+    setShowNewChatForm(true) // Explicitly show new chat form
+>>>>>>> upstream/main
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2073,6 +2234,7 @@ export function AgentsSidebar({
     // In multi-select mode, clicking on the item still navigates to the chat
     // Only clicking on the checkbox toggles selection
     setSelectedChatId(chatId)
+<<<<<<< HEAD
 
     // Clear workflow category when chat is selected (to show chat view)
     setSelectedCategory(null)
@@ -2081,11 +2243,18 @@ export function AgentsSidebar({
     // Clear clusters category when chat is selected
     setSelectedClustersCategory(null)
 
+=======
+    setShowNewChatForm(false) // Clear new chat form state when selecting a workspace
+>>>>>>> upstream/main
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
+<<<<<<< HEAD
   }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect])
+=======
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setShowNewChatForm, isMobileFullscreen, onChatSelect])
+>>>>>>> upstream/main
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
@@ -2446,6 +2615,7 @@ export function AgentsSidebar({
       {/* Tab bar for switching between views */}
       <SidebarTabBar />
 
+<<<<<<< HEAD
       {/* Tab-specific content - hide when collapsed */}
       {!isContentCollapsed && (
         <>
@@ -2463,6 +2633,205 @@ export function AgentsSidebar({
             <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : selectedSidebarTab === "clusters" ? (
             <ClustersTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+=======
+                if (e.key === "ArrowDown") {
+                  e.preventDefault()
+                  setFocusedChatIndex((prev) => {
+                    // If no focus yet, start from first item
+                    if (prev === -1) return 0
+                    // Otherwise move down
+                    return prev < filteredChats.length - 1 ? prev + 1 : prev
+                  })
+                  return
+                }
+
+                if (e.key === "ArrowUp") {
+                  e.preventDefault()
+                  setFocusedChatIndex((prev) => {
+                    // If no focus yet, start from last item
+                    if (prev === -1) return filteredChats.length - 1
+                    // Otherwise move up
+                    return prev > 0 ? prev - 1 : prev
+                  })
+                  return
+                }
+
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  // Only open if something is focused (not -1)
+                  if (focusedChatIndex >= 0) {
+                    const focusedChat = filteredChats[focusedChatIndex]
+                    if (focusedChat) {
+                      handleChatClick(focusedChat.id)
+                      searchInputRef.current?.blur()
+                      setFocusedChatIndex(-1) // Reset focus after selection
+                    }
+                  }
+                  return
+                }
+              }}
+              className={cn(
+                "w-full rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40",
+                isMobileFullscreen ? "h-10" : "h-7",
+              )}
+            />
+          </div>
+          {/* New Workspace Button */}
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <ButtonCustom
+                onClick={handleNewAgent}
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg gap-1.5",
+                  isMobileFullscreen ? "h-10" : "h-7",
+                )}
+              >
+                <span className="text-sm font-medium">New Workspace</span>
+              </ButtonCustom>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Start a new workspace
+              {newWorkspaceHotkey && <Kbd>{newWorkspaceHotkey}</Kbd>}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+
+      {/* Scrollable Agents List */}
+      <div className="flex-1 min-h-0 relative">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleAgentsScroll}
+          className={cn(
+            "h-full overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent",
+            isMultiSelectMode ? "px-0" : "px-2",
+          )}
+        >
+          {/* Drafts Section - always show if there are drafts */}
+          {drafts.length > 0 && !searchQuery && (
+            <div className={cn("mb-4", isMultiSelectMode ? "px-0" : "-mx-1")}>
+              <div
+                className={cn(
+                  "flex items-center h-4 mb-1",
+                  isMultiSelectMode ? "pl-3" : "pl-2",
+                )}
+              >
+                <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                  Drafts
+                </h3>
+              </div>
+              <div className="list-none p-0 m-0">
+                {drafts.map((draft) => (
+                  <DraftItem
+                    key={draft.id}
+                    draftId={draft.id}
+                    draftText={draft.text}
+                    draftUpdatedAt={draft.updatedAt}
+                    projectGitOwner={draft.project?.gitOwner}
+                    projectGitProvider={draft.project?.gitProvider}
+                    projectGitRepo={draft.project?.gitRepo}
+                    projectName={draft.project?.name}
+                    isSelected={selectedDraftId === draft.id && !selectedChatId}
+                    isMultiSelectMode={isMultiSelectMode}
+                    isMobileFullscreen={isMobileFullscreen}
+                    showIcon={showWorkspaceIcon}
+                    onSelect={handleDraftSelect}
+                    onDelete={handleDeleteDraft}
+                    formatTime={formatTime}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chats Section */}
+          {filteredChats.length > 0 ? (
+            <div className={cn("mb-4", isMultiSelectMode ? "px-0" : "-mx-1")}>
+              {/* Pinned section */}
+              <ChatListSection
+                title="Pinned workspaces"
+                chats={pinnedAgents}
+                selectedChatId={selectedChatId}
+                focusedChatIndex={focusedChatIndex}
+                loadingChatIds={loadingChatIds}
+                unseenChanges={unseenChanges}
+                workspacePendingPlans={workspacePendingPlans}
+                workspacePendingQuestions={workspacePendingQuestions}
+                isMultiSelectMode={isMultiSelectMode}
+                selectedChatIds={selectedChatIds}
+                isMobileFullscreen={isMobileFullscreen}
+                isDesktop={isDesktop}
+                pinnedChatIds={pinnedChatIds}
+                projectsMap={projectsMap}
+                workspaceFileStats={workspaceFileStats}
+                filteredChats={filteredChats}
+                canShowPinOption={canShowPinOption}
+                areAllSelectedPinned={areAllSelectedPinned}
+                showIcon={showWorkspaceIcon}
+                onChatClick={handleChatClick}
+                onCheckboxClick={handleCheckboxClick}
+                onMouseEnter={handleAgentMouseEnter}
+                onMouseLeave={handleAgentMouseLeave}
+                onArchive={handleArchiveSingle}
+                onTogglePin={handleTogglePin}
+                onRenameClick={handleRenameClick}
+                onCopyBranch={handleCopyBranch}
+                onArchiveAllBelow={handleArchiveAllBelow}
+                onArchiveOthers={handleArchiveOthers}
+                onBulkPin={handleBulkPin}
+                onBulkUnpin={handleBulkUnpin}
+                onBulkArchive={handleBulkArchive}
+                archivePending={archiveChatMutation.isPending}
+                archiveBatchPending={archiveChatsBatchMutation.isPending}
+                nameRefCallback={nameRefCallback}
+                formatTime={formatTime}
+                justCreatedIds={justCreatedIds}
+              />
+
+              {/* Unpinned section */}
+              <ChatListSection
+                title={pinnedAgents.length > 0 ? "Recent workspaces" : "Workspaces"}
+                chats={unpinnedAgents}
+                selectedChatId={selectedChatId}
+                focusedChatIndex={focusedChatIndex}
+                loadingChatIds={loadingChatIds}
+                unseenChanges={unseenChanges}
+                workspacePendingPlans={workspacePendingPlans}
+                workspacePendingQuestions={workspacePendingQuestions}
+                isMultiSelectMode={isMultiSelectMode}
+                selectedChatIds={selectedChatIds}
+                isMobileFullscreen={isMobileFullscreen}
+                isDesktop={isDesktop}
+                pinnedChatIds={pinnedChatIds}
+                projectsMap={projectsMap}
+                workspaceFileStats={workspaceFileStats}
+                filteredChats={filteredChats}
+                canShowPinOption={canShowPinOption}
+                areAllSelectedPinned={areAllSelectedPinned}
+                showIcon={showWorkspaceIcon}
+                onChatClick={handleChatClick}
+                onCheckboxClick={handleCheckboxClick}
+                onMouseEnter={handleAgentMouseEnter}
+                onMouseLeave={handleAgentMouseLeave}
+                onArchive={handleArchiveSingle}
+                onTogglePin={handleTogglePin}
+                onRenameClick={handleRenameClick}
+                onCopyBranch={handleCopyBranch}
+                onArchiveAllBelow={handleArchiveAllBelow}
+                onArchiveOthers={handleArchiveOthers}
+                onBulkPin={handleBulkPin}
+                onBulkUnpin={handleBulkUnpin}
+                onBulkArchive={handleBulkArchive}
+                archivePending={archiveChatMutation.isPending}
+                archiveBatchPending={archiveChatsBatchMutation.isPending}
+                nameRefCallback={nameRefCallback}
+                formatTime={formatTime}
+                justCreatedIds={justCreatedIds}
+              />
+            </div>
+>>>>>>> upstream/main
           ) : null}
         </>
       )}
@@ -2552,6 +2921,9 @@ export function AgentsSidebar({
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
+
+                {/* Kanban View Button - isolated component */}
+                <KanbanButton />
 
                 {/* Archive Button - isolated component to prevent sidebar re-renders */}
                 <ArchiveSection archivedChatsCount={archivedChatsCount} />

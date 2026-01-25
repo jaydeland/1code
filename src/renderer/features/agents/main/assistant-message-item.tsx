@@ -4,14 +4,16 @@ import { useAtomValue } from "jotai"
 import { ListTree } from "lucide-react"
 import { memo, useCallback, useMemo, useState } from "react"
 
-import { CollapseIcon, ExpandIcon, IconTextUndo } from "../../../components/ui/icons"
+import { CollapseIcon, ExpandIcon, IconTextUndo, PlanIcon } from "../../../components/ui/icons"
+import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
 import { isRollingBackAtom, rollbackHandlerAtom } from "../stores/message-store"
 import { AgentAskUserQuestionTool } from "../ui/agent-ask-user-question-tool"
 import { AgentBashTool } from "../ui/agent-bash-tool"
 import { AgentEditTool } from "../ui/agent-edit-tool"
-import { AgentExitPlanModeTool } from "../ui/agent-exit-plan-mode-tool"
 import { AgentExploringGroup } from "../ui/agent-exploring-group"
+import { AgentPlanFileTool } from "../ui/agent-plan-file-tool"
+import { isPlanFile } from "../ui/agent-tool-utils"
 import {
   AgentMessageUsage,
   type AgentMessageMetadata,
@@ -135,15 +137,16 @@ export interface AssistantMessageItemProps {
   status: string
   isMobile: boolean
   subChatId: string
+  chatId: string
   sandboxSetupStatus?: "cloning" | "ready" | "error"
 }
 
 // Cache for tracking previous message state per message (to detect AI SDK in-place mutations)
-// Stores both text lengths and tool input JSON strings for complete change detection
+// Stores both text lengths and tool states for complete change detection
 interface MessageStateSnapshot {
   textLengths: number[]
+  partStates: (string | undefined)[]
   lastPartInputJson: string | undefined
-  lastPartState: string | undefined
 }
 const messageStateCache = new Map<string, MessageStateSnapshot>()
 
@@ -168,6 +171,7 @@ function areMessagePropsEqual(
   if (prev.isLastMessage !== next.isLastMessage) return false
   if (prev.isMobile !== next.isMobile) return false
   if (prev.subChatId !== next.subChatId) return false
+  if (prev.chatId !== next.chatId) return false
   if (prev.sandboxSetupStatus !== next.sandboxSetupStatus) return false
 
   // Get current message state from parts
@@ -178,9 +182,10 @@ function areMessagePropsEqual(
     textLengths: nextParts.map((p: any) =>
       p.type === "text" ? (p.text?.length || 0) : -1
     ),
+    // Track ALL part states - critical for detecting Edit plan file streaming!
+    partStates: nextParts.map((p: any) => p.state),
     // Track tool input changes - this is critical for tool streaming!
     lastPartInputJson: lastPart?.input ? JSON.stringify(lastPart.input) : undefined,
-    lastPartState: lastPart?.state,
   }
 
   // Get cached state from previous render
@@ -212,10 +217,12 @@ function areMessagePropsEqual(
     return false  // Tool input changed
   }
 
-  // Compare last part's state
-  if (cachedState.lastPartState !== currentState.lastPartState) {
-    messageStateCache.set(msgId!, currentState)
-    return false  // Part state changed
+  // Compare ALL part states (detects Edit plan file streaming!)
+  for (let i = 0; i < currentState.partStates.length; i++) {
+    if (cachedState.partStates[i] !== currentState.partStates[i]) {
+      messageStateCache.set(msgId!, currentState)
+      return false  // Part state changed
+    }
   }
 
   // Nothing changed - skip re-render
@@ -229,6 +236,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   status,
   isMobile,
   subChatId,
+  chatId,
   sandboxSetupStatus = "ready",
 }: AssistantMessageItemProps) {
   const onRollback = useAtomValue(rollbackHandlerAtom)
@@ -283,12 +291,50 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     return { nestedToolsMap, nestedToolIds, orphanTaskGroups, orphanToolCallIds, orphanFirstToolCallIds }
   }, [messageParts])
 
-  const { finalTextIndex, hasFinalText, visibleStepsCount, hasPlan, exitPlanPart, planText } = useMemo(() => {
-    let lastToolIndex = -1
-    let lastTextIndex = -1
+  // Collect all plan operations (Write/Edit) for unified handling
+  const planOpsSummary = useMemo(() => {
+    const operations: Array<{ type: "write" | "edit"; part: any; index: number }> = []
+
     for (let i = 0; i < messageParts.length; i++) {
       const part = messageParts[i]
-      if (part.type?.startsWith("tool-")) {
+      const filePath = part.input?.file_path || ""
+
+      if ((part.type === "tool-Write" || part.type === "tool-Edit") && isPlanFile(filePath)) {
+        operations.push({
+          type: part.type === "tool-Write" ? "write" : "edit",
+          part,
+          index: i,
+        })
+      }
+    }
+
+    if (operations.length === 0) {
+      return { operations: [], hasAnyPlanOperation: false, isStreaming: false, lastOperationType: null as "write" | "edit" | null }
+    }
+
+    const isStreaming = operations.some(op =>
+      op.part.state === "input-streaming" || op.part.state === "pending"
+    )
+
+    const lastOp = operations[operations.length - 1]
+
+    return {
+      operations,
+      hasAnyPlanOperation: true,
+      isStreaming,
+      lastOperationType: lastOp.type,
+    }
+  }, [messageParts])
+
+  // Collapsing logic: collapse only if final text exists after tools
+  const { shouldCollapse, visibleStepsCount, collapseBeforeIndex } = useMemo(() => {
+    let lastToolIndex = -1
+    let lastTextIndex = -1
+
+    for (let i = 0; i < messageParts.length; i++) {
+      const part = messageParts[i]
+      // Ignore ExitPlanMode - it's not a real tool for the user
+      if (part.type?.startsWith("tool-") && part.type !== "tool-ExitPlanMode") {
         lastToolIndex = i
       }
       if (part.type === "text" && part.text?.trim()) {
@@ -300,39 +346,47 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     const finalTextIndex = hasToolsAndFinalText ? lastTextIndex : -1
     const hasFinalText = finalTextIndex !== -1 && (!isStreaming || !isLastMessage)
 
-    const exitPlanPart = messageParts.find((p: any) => p.type === "tool-ExitPlanMode")
-    const planText = typeof exitPlanPart?.output?.plan === "string" ? exitPlanPart.output.plan : ""
-    const hasPlan = !!planText
+    // Collapse only when there's final text after tools
+    const shouldCollapse = hasFinalText
+    const collapseBeforeIndex = hasFinalText ? finalTextIndex : -1
 
-    const stepParts = hasFinalText
-      ? messageParts.slice(0, finalTextIndex)
-      : hasPlan
-        ? messageParts.filter((p: any) => p.type !== "tool-ExitPlanMode")
-        : []
-
+    // Calculate visible steps count for collapsible header
+    const stepParts = shouldCollapse && collapseBeforeIndex !== -1 ? messageParts.slice(0, collapseBeforeIndex) : []
     const visibleStepsCount = stepParts.filter((p: any) => {
       if (p.type === "step-start") return false
       if (p.type === "tool-TaskOutput") return false
+      if (p.type === "tool-ExitPlanMode") return false
       if (p.toolCallId && nestedToolIds.has(p.toolCallId)) return false
       if (p.toolCallId && orphanToolCallIds.has(p.toolCallId) && !orphanFirstToolCallIds.has(p.toolCallId)) return false
       if (p.type === "text" && !p.text?.trim()) return false
       return true
     }).length
 
-    return { finalTextIndex, hasFinalText, visibleStepsCount, hasPlan, exitPlanPart, planText }
+    return { shouldCollapse, visibleStepsCount, collapseBeforeIndex }
   }, [messageParts, isStreaming, isLastMessage, nestedToolIds, orphanToolCallIds, orphanFirstToolCallIds])
 
+  // Check if any plan operation is in collapsed steps (before collapseBeforeIndex)
+  const hasPlanInCollapsedSteps = useMemo(() => {
+    if (!shouldCollapse || collapseBeforeIndex === -1) return false
+    return planOpsSummary.operations.some(op => op.index < collapseBeforeIndex)
+  }, [shouldCollapse, collapseBeforeIndex, planOpsSummary.operations])
+
+  // Get the last plan operation from collapsed steps for showing card
+  const lastCollapsedPlanOp = useMemo(() => {
+    if (!hasPlanInCollapsedSteps) return null
+    const collapsedOps = planOpsSummary.operations.filter(op => op.index < collapseBeforeIndex)
+    return collapsedOps[collapsedOps.length - 1] || null
+  }, [hasPlanInCollapsedSteps, planOpsSummary.operations, collapseBeforeIndex])
+
   const stepParts = useMemo(() => {
-    if (hasFinalText) return messageParts.slice(0, finalTextIndex)
-    if (hasPlan) return messageParts.filter((p: any) => p.type !== "tool-ExitPlanMode")
-    return []
-  }, [messageParts, hasFinalText, hasPlan, finalTextIndex])
+    if (!shouldCollapse || collapseBeforeIndex === -1) return []
+    return messageParts.slice(0, collapseBeforeIndex)
+  }, [messageParts, shouldCollapse, collapseBeforeIndex])
 
   const finalParts = useMemo(() => {
-    if (hasFinalText) return messageParts.slice(finalTextIndex)
-    if (hasPlan) return []
-    return messageParts
-  }, [messageParts, hasFinalText, hasPlan, finalTextIndex])
+    if (!shouldCollapse || collapseBeforeIndex === -1) return messageParts
+    return messageParts.slice(collapseBeforeIndex)
+  }, [messageParts, shouldCollapse, collapseBeforeIndex])
 
   const hasTextContent = useMemo(() =>
     messageParts.some((p: any) => p.type === "text" && p.text?.trim()),
@@ -370,7 +424,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
 
     if (part.type === "text") {
       if (!part.text?.trim()) return null
-      const isFinalText = isFinal && idx === finalTextIndex
+      const isFinalText = isFinal && idx === collapseBeforeIndex
       const isTextStreaming = isLastMessage && isStreaming
       return (
         <MemoizedTextPart
@@ -392,23 +446,74 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
 
     if (part.type === "tool-Bash") return <AgentBashTool key={idx} part={part} messageId={message.id} partIndex={idx} chatStatus={status} />
     if (part.type === "tool-Thinking") return <AgentThinkingTool key={idx} part={part} chatStatus={status} />
+
+    // Plan files: unified handling
+    // - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
+    // - In final parts: all but last show mini indicator, last shows full card
+    if (part.type === "tool-Write" || part.type === "tool-Edit") {
+      const filePath = part.input?.file_path || ""
+      if (isPlanFile(filePath)) {
+        // Use part.toolCallId to find operation since idx may be adjusted for collapsed parts
+        const opIndex = planOpsSummary.operations.findIndex(op => op.part.toolCallId === part.toolCallId)
+        if (opIndex === -1) return null
+
+        const originalIndex = planOpsSummary.operations[opIndex]?.index ?? -1
+        const isInCollapsedSteps = shouldCollapse && collapseBeforeIndex !== -1 && originalIndex < collapseBeforeIndex
+        const isLastCollapsedOp = lastCollapsedPlanOp?.part.toolCallId === part.toolCallId
+        const isLastOperation = opIndex === planOpsSummary.operations.length - 1
+
+        // If this is the last collapsed plan op, hide it here (card shown after CollapsibleSteps)
+        if (isInCollapsedSteps && isLastCollapsedOp) {
+          return null
+        }
+
+        // Show mini indicator for:
+        // - All operations in collapsed steps (except last collapsed, handled above)
+        // - All operations except last in final parts
+        const showMiniIndicator = isInCollapsedSteps || !isLastOperation
+
+        if (showMiniIndicator) {
+          const isWrite = part.type === "tool-Write"
+          const { isPending } = getToolStatus(part, status)
+          const isOpStreaming = isPending || (part.state === "input-streaming" && isStreaming && isLastMessage)
+
+          return (
+            <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5">
+              <span className="text-xs text-muted-foreground">
+                {isOpStreaming ? (
+                  <TextShimmer as="span" duration={1.2}>
+                    {isWrite ? "Creating plan..." : "Updating plan..."}
+                  </TextShimmer>
+                ) : (
+                  isWrite ? "Created plan" : "Updated plan"
+                )}
+              </span>
+            </div>
+          )
+        }
+
+        // Last operation in final parts: show full card
+        return (
+          <AgentPlanFileTool
+            key={idx}
+            part={part}
+            chatStatus={status}
+            subChatId={subChatId}
+            isEdit={part.type === "tool-Edit"}
+          />
+        )
+      }
+    }
+
     if (part.type === "tool-Edit") return <AgentEditTool key={idx} part={part} messageId={message.id} partIndex={idx} chatStatus={status} />
     if (part.type === "tool-Write") return <AgentEditTool key={idx} part={part} messageId={message.id} partIndex={idx} chatStatus={status} />
     if (part.type === "tool-WebSearch") return <AgentWebSearchCollapsible key={idx} part={part} chatStatus={status} />
     if (part.type === "tool-WebFetch") return <AgentWebFetchTool key={idx} part={part} chatStatus={status} />
     if (part.type === "tool-PlanWrite") return <AgentPlanTool key={idx} part={part} chatStatus={status} />
 
+    // ExitPlanMode tool is hidden - plan is shown in sidebar instead
     if (part.type === "tool-ExitPlanMode") {
-      const { isPending, isError } = getToolStatus(part, status)
-      return (
-        <AgentToolCall
-          key={idx}
-          icon={AgentToolRegistry["tool-ExitPlanMode"].icon}
-          title={AgentToolRegistry["tool-ExitPlanMode"].title(part)}
-          isPending={isPending}
-          isError={isError}
-        />
-      )
+      return null
     }
 
     if (part.type === "tool-TodoWrite") {
@@ -455,7 +560,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     }
 
     return null
-  }, [nestedToolsMap, nestedToolIds, orphanToolCallIds, orphanFirstToolCallIds, orphanTaskGroups, finalTextIndex, visibleStepsCount, status, isLastMessage, isStreaming, subChatId, message.id])
+  }, [nestedToolsMap, nestedToolIds, orphanToolCallIds, orphanFirstToolCallIds, orphanTaskGroups, collapseBeforeIndex, visibleStepsCount, status, isLastMessage, isStreaming, subChatId, message.id, planOpsSummary, shouldCollapse, lastCollapsedPlanOp])
 
   if (!message) return null
 
@@ -465,7 +570,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       className="group/message w-full mb-4"
     >
       <div className="flex flex-col gap-1.5">
-        {(hasFinalText || hasPlan) && visibleStepsCount > 0 && (
+        {shouldCollapse && visibleStepsCount > 0 && (
           <CollapsibleSteps stepsCount={visibleStepsCount}>
             {(() => {
               const grouped = groupExploringTools(stepParts, nestedToolIds)
@@ -503,12 +608,18 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
                 />
               )
             }
-            return renderPart(part, hasFinalText ? finalTextIndex + idx : idx, hasFinalText)
+            return renderPart(part, shouldCollapse ? collapseBeforeIndex + idx : idx, shouldCollapse)
           })
         })()}
 
-        {hasPlan && exitPlanPart && (
-          <AgentExitPlanModeTool part={exitPlanPart as any} chatStatus={status} />
+        {/* Show plan card after finalParts if any plan operation was in collapsed steps */}
+        {shouldCollapse && lastCollapsedPlanOp && (
+          <AgentPlanFileTool
+            part={lastCollapsedPlanOp.part}
+            chatStatus={status}
+            subChatId={subChatId}
+            isEdit={lastCollapsedPlanOp.type === "edit"}
+          />
         )}
 
         {shouldShowPlanning && (
@@ -519,17 +630,18 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
             isError={false}
           />
         )}
+
       </div>
 
-      {(hasTextContent || hasPlan) && (!isStreaming || !isLastMessage) && (
+      {hasTextContent && (!isStreaming || !isLastMessage) && (
         <div className="flex justify-between items-center h-6 px-2 mt-1">
           <div className="flex items-center gap-0.5">
             <CopyButton
-              text={hasPlan ? planText : getMessageTextContent(message)}
+              text={getMessageTextContent(message)}
               isMobile={isMobile}
             />
             <PlayButton
-              text={hasPlan ? planText : getMessageTextContent(message)}
+              text={getMessageTextContent(message)}
               isMobile={isMobile}
             />
             {onRollback && (message.metadata as any)?.sdkMessageUuid && (

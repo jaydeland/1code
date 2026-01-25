@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm"
 import { safeStorage, shell } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
+import { getClaudeShellEnvironment } from "../../claude"
 import { getExistingClaudeToken } from "../../claude-token"
 import { getApiUrl } from "../../config"
 import { claudeCodeCredentials, claudeCodeSettings, getDatabase } from "../../db"
@@ -63,6 +64,21 @@ function storeOAuthToken(oauthToken: string) {
  * Uses server only for sandbox creation, stores token locally
  */
 export const claudeCodeRouter = router({
+  /**
+   * Check if user has existing CLI config (API key or proxy)
+   * If true, user can skip OAuth onboarding
+   * Based on PR #29 by @sa4hnd
+   */
+  hasExistingCliConfig: publicProcedure.query(() => {
+    const shellEnv = getClaudeShellEnvironment()
+    const hasConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_BASE_URL)
+    return {
+      hasConfig,
+      hasApiKey: !!shellEnv.ANTHROPIC_API_KEY,
+      baseUrl: shellEnv.ANTHROPIC_BASE_URL || null,
+    }
+  }),
+
   /**
    * Check if user has Claude Code connected (local check)
    */

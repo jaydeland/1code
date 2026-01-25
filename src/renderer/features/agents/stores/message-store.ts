@@ -626,7 +626,11 @@ export const syncMessagesWithStatusAtom = atom(
     // 2. msg.parts array is mutated in-place
     // 3. Individual part objects inside parts are mutated in-place
     for (const msg of messages) {
-      if (hasMessageChanged(currentSubChatId, msg.id, msg)) {
+      const currentAtomValue = get(messageAtomFamily(msg.id))
+      const msgChanged = hasMessageChanged(currentSubChatId, msg.id, msg)
+
+      // CRITICAL FIX: Also update if atom is null (not yet populated)
+      if (msgChanged || !currentAtomValue) {
         // Deep clone message with new parts array and new part objects
         const clonedMsg = {
           ...msg,

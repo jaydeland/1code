@@ -10,8 +10,13 @@ import {
   isDesktopAtom,
   isFullscreenAtom,
   customHotkeysAtom,
+  betaKanbanEnabledAtom,
 } from "../../lib/atoms"
+<<<<<<< HEAD
 import { selectedAgentChatIdAtom, selectedProjectAtom, selectedSidebarTabAtom, sidebarContentCollapsedAtom } from "../agents/atoms"
+=======
+import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom } from "../agents/atoms"
+>>>>>>> upstream/main
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -98,8 +103,17 @@ export function AgentsLayout() {
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+<<<<<<< HEAD
   const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
   const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
+=======
+  const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
+  const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
+  const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const setAnthropicOnboardingCompleted = useSetAtom(
+    anthropicOnboardingCompletedAtom
+  )
+>>>>>>> upstream/main
 
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
@@ -189,12 +203,15 @@ export function AgentsLayout() {
   // Initialize hotkeys manager
   useAgentsHotkeys({
     setSelectedChatId,
+    setSelectedDraftId,
+    setShowNewChatForm,
     setSidebarOpen,
     setSettingsDialogOpen: setSettingsOpen,
     setSettingsActiveTab,
     toggleChatSearch,
     selectedChatId,
     customHotkeysConfig,
+    betaKanbanEnabled,
   })
 
   return (

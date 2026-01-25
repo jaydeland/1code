@@ -50,14 +50,12 @@ export async function checkOllamaStatus(): Promise<OllamaStatus> {
 
     // If no exact match, try to find any qwen-coder, deepseek-coder, or codestral variant
     if (!recommendedModel) {
-      recommendedModel = models.find(m =>
+      recommendedModel = models.find((m: string) =>
         m.includes('qwen') && m.includes('coder') ||
         m.includes('deepseek') && m.includes('coder') ||
         m.includes('codestral')
       )
     }
-
-    console.log(`[Ollama] Available: ${models.length} models found`, models)
 
     return {
       available: true,
@@ -65,8 +63,8 @@ export async function checkOllamaStatus(): Promise<OllamaStatus> {
       recommendedModel: recommendedModel || models[0], // Fallback to any model
       version: data.version,
     }
-  } catch (error) {
-    console.log('[Ollama] Not available:', error)
+  } catch {
+    // Ollama not available - no need to log, this is expected when offline mode is disabled
     return { available: false, models: [] }
   }
 }

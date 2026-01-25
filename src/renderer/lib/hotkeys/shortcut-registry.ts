@@ -43,6 +43,12 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
   // WORKSPACES
   // ============================================
   {
+    id: "toggle-details",
+    label: "View details",
+    category: "workspaces",
+    defaultKeys: ["cmd", "shift", "\\"],
+  },
+  {
     id: "new-workspace",
     label: "New workspace",
     category: "workspaces",
@@ -67,6 +73,12 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     defaultKeys: ["ctrl", "Tab"],
     isDynamic: true,
     dynamicDescription: "Controlled by Ctrl+Tab preference",
+  },
+  {
+    id: "open-kanban",
+    label: "Open Kanban board",
+    category: "workspaces",
+    defaultKeys: ["cmd", "shift", "K"],
   },
 
   // ============================================
@@ -158,6 +170,12 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     label: "Create PR",
     category: "agents",
     defaultKeys: ["cmd", "P"],
+  },
+  {
+    id: "voice-input",
+    label: "Voice input (hold)",
+    category: "agents",
+    defaultKeys: ["ctrl", "opt"],
   },
 ]
 

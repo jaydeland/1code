@@ -65,8 +65,13 @@ function parseSkillMd(content: string): { name?: string; description?: string } 
  */
 async function scanSkillsDirectory(
   dir: string,
+<<<<<<< HEAD
   source: "user" | "project" | "custom",
   namePrefix = "",
+=======
+  source: "user" | "project",
+  basePath?: string, // For project skills, the cwd to make paths relative to
+>>>>>>> upstream/main
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
 
@@ -103,11 +108,23 @@ async function scanSkillsDirectory(
         const content = await fs.readFile(skillMdPath, "utf-8")
         const parsed = parseSkillMd(content)
 
+        // For project skills, show relative path; for user skills, show ~/.claude/... path
+        let displayPath: string
+        if (source === "project" && basePath) {
+          displayPath = path.relative(basePath, skillMdPath)
+        } else {
+          // For user skills, show ~/.claude/skills/... format
+          const homeDir = os.homedir()
+          displayPath = skillMdPath.startsWith(homeDir)
+            ? "~" + skillMdPath.slice(homeDir.length)
+            : skillMdPath
+        }
+
         skills.push({
           name: parsed.name || skillName,  // Use frontmatter name or derived name
           description: parsed.description || "",
           source,
-          path: skillMdPath,
+          path: displayPath,
         })
       } catch {
         // No SKILL.md in this directory - check if it's a namespace directory
@@ -139,6 +156,7 @@ const listSkillsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("skills", input?.cwd)
 
+<<<<<<< HEAD
     // Get custom plugin directories from database
     const customDirs = getCustomPluginDirectories()
 
@@ -148,6 +166,12 @@ const listSkillsProcedure = publicProcedure
     // Project skills (highest priority)
     if (locations.projectDir) {
       scanPromises.push(scanSkillsDirectory(locations.projectDir, "project"))
+=======
+    let projectSkillsPromise = Promise.resolve<FileSkill[]>([])
+    if (input?.cwd) {
+      const projectSkillsDir = path.join(input.cwd, ".claude", "skills")
+      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
+>>>>>>> upstream/main
     }
 
     // User skills

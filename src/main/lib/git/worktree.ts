@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { devNull, homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import simpleGit from "simple-git";
@@ -12,6 +12,7 @@ import {
 } from "unique-names-generator";
 import { checkGitLfsAvailable, getShellEnvironment } from "./shell-env";
 import { executeWorktreeSetup } from "./worktree-config";
+import { generateWorktreeFolderName } from "./worktree-naming";
 
 const execFileAsync = promisify(execFile);
 
@@ -150,6 +151,21 @@ export async function createWorktree(
 			}
 		}
 
+		// Resolve startPoint to commit hash to avoid Windows escaping issues with ^{commit}
+		const git = simpleGit(mainRepoPath);
+		let commitHash: string;
+		try {
+			commitHash = (await git.revparse([`${startPoint}^{commit}`])).trim();
+		} catch {
+			// Fallback to local branch if origin/branch doesn't exist
+			const localBranch = startPoint.replace(/^origin\//, "");
+			try {
+				commitHash = (await git.revparse([`${localBranch}^{commit}`])).trim();
+			} catch {
+				commitHash = (await git.revparse([startPoint])).trim();
+			}
+		}
+
 		await execFileAsync(
 			"git",
 			[
@@ -160,10 +176,7 @@ export async function createWorktree(
 				worktreePath,
 				"-b",
 				branch,
-				// Append ^{commit} to force Git to treat the startPoint as a commit,
-				// not a branch ref. This prevents implicit upstream tracking when
-				// creating a new branch from a remote branch like origin/main.
-				`${startPoint}^{commit}`,
+				commitHash,
 			],
 			{ env, timeout: 120_000 },
 		);
@@ -911,16 +924,20 @@ export async function getDefaultWorktreePath(projectPath: string): Promise<strin
 /**
  * Create a git worktree for a chat (wrapper for chats.ts)
  * @param projectPath - Path to the main repository
- * @param projectId - Project ID for worktree directory
- * @param chatId - Chat ID for worktree directory
+ * @param projectSlug - Sanitized project name for worktree directory
+ * @param chatId - Chat ID (used for logging)
  * @param selectedBaseBranch - Optional branch to base the worktree off (defaults to auto-detected default branch)
  */
 export async function createWorktreeForChat(
 	projectPath: string,
-	projectId: string,
+	projectSlug: string,
 	chatId: string,
 	selectedBaseBranch?: string,
+<<<<<<< HEAD
 	customWorktreeLocation?: string | null,
+=======
+	branchType?: "local" | "remote",
+>>>>>>> upstream/main
 ): Promise<WorktreeResult> {
 	try {
 		const git = simpleGit(projectPath);
@@ -934,6 +951,7 @@ export async function createWorktreeForChat(
 		const baseBranch = selectedBaseBranch || await getDefaultBranch(projectPath);
 
 		const branch = generateBranchName();
+<<<<<<< HEAD
 
 		// Determine worktree path
 		let worktreePath: string;
@@ -948,8 +966,19 @@ export async function createWorktreeForChat(
 			worktreePath = await getDefaultWorktreePath(projectPath);
 			console.log(`[worktree] Using default sibling location: ${worktreePath}`);
 		}
+=======
+		const worktreesDir = join(homedir(), ".21st", "worktrees");
+		const projectWorktreeDir = join(worktreesDir, projectSlug);
+		const folderName = generateWorktreeFolderName(projectWorktreeDir);
+		const worktreePath = join(projectWorktreeDir, folderName);
+>>>>>>> upstream/main
 
-		await createWorktree(projectPath, branch, worktreePath, `origin/${baseBranch}`);
+		// Determine startPoint based on branch type
+		// For local branches, use the local ref directly
+		// For remote branches or when type is not specified, use origin/{branch}
+		const startPoint = branchType === "local" ? baseBranch : `origin/${baseBranch}`;
+
+		await createWorktree(projectPath, branch, worktreePath, startPoint);
 
 		// Run worktree setup commands in BACKGROUND (don't block chat creation)
 		// This allows the user to start chatting immediately while deps install
@@ -1025,7 +1054,7 @@ export async function getWorktreeDiff(
 						"diff",
 						"--no-color",
 						"--no-index",
-						"/dev/null",
+						devNull,
 						file,
 					]);
 					if (fileDiff) {

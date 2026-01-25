@@ -14,9 +14,11 @@ let cachedShellEnv: Record<string, string> | null = null
 // Delimiter for parsing env output
 const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
 
-// Keys to strip (prevent auth interference)
+// Keys to strip (prevent interference from unrelated providers)
+// NOTE: We intentionally keep ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL
+// so users can use their existing Claude Code CLI configuration (API proxy, etc.)
+// Based on PR #29 by @sa4hnd
 const STRIPPED_ENV_KEYS = [
-  "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
