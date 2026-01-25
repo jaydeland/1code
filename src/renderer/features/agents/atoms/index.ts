@@ -259,7 +259,7 @@ export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
 
 export const diffViewDisplayModeAtom = atomWithStorage<DiffViewDisplayMode>(
   "agents:diffViewDisplayMode",
-  "side-peek", // default to current behavior
+  "full-page", // default to full-screen view
   undefined,
   { getOnInit: true },
 )
@@ -343,11 +343,13 @@ export const diffFilesCollapsedAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
+// DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
 // Sub-chats display mode - tabs (horizontal) or sidebar (vertical list)
 export const agentsSubChatsSidebarModeAtom = atomWithStorage<
   "tabs" | "sidebar"
 >("agents-subchats-mode", "tabs", undefined, { getOnInit: true })
 
+// DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
 // Sub-chats sidebar width (left side of chat area)
 export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
   "agents-subchats-sidebar-width",
@@ -547,7 +549,6 @@ export const justCreatedIdsAtom = atom<Set<string>>(new Set())
 // Pending user questions from AskUserQuestion tool
 // Set when Claude requests user input, cleared when answered or skipped
 export const QUESTIONS_SKIPPED_MESSAGE = "User skipped questions - proceed with defaults"
-export const QUESTIONS_TIMED_OUT_MESSAGE = "Timed out"
 
 export type PendingUserQuestion = {
   subChatId: string
@@ -609,4 +610,79 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
       set(viewedFilesStorageAtom, { ...current, [chatId]: newState })
     },
   ),
+)
+
+// ============================================
+// COMMAND SELECTION
+// ============================================
+
+/**
+ * Currently selected command path for detail view
+ * null = no command selected
+ */
+export const selectedCommandAtom = atom<string | null>(null)
+
+// ============================================
+// SIDEBAR TAB NAVIGATION
+// ============================================
+
+/**
+ * Sidebar tab types:
+ * - "chats": Default chat list view
+ * - "commands": List of available commands
+ * - "agents": List of available agents
+ * - "skills": List of available skills
+ * - "mcps": List of MCP servers
+ * - "terminal": Terminal sessions list
+ */
+export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal"
+
+/**
+ * Currently selected sidebar tab (persisted)
+ * Defaults to "chats" which shows the workspace list
+ */
+export const selectedSidebarTabAtom = atomWithStorage<SidebarTab>(
+  "agents:selectedSidebarTab",
+  "chats",
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Sidebar content collapsed state (persisted)
+ * When collapsed, only the tab bar is shown, not the tab content
+ */
+export const sidebarContentCollapsedAtom = atomWithStorage<boolean>(
+  "agents:sidebarContentCollapsed",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
+/**
+ * Expanded workspace IDs in tree view (persisted)
+ * Tracks which workspaces are expanded to show their nested chats
+ */
+export const expandedWorkspaceIdsAtom = atomWithStorage<Set<string>>(
+  "agents:expandedWorkspaceIds",
+  new Set(),
+  {
+    getItem: (key, initialValue) => {
+      const stored = localStorage.getItem(key)
+      if (!stored) return initialValue
+      try {
+        const arr = JSON.parse(stored) as string[]
+        return new Set(arr)
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(Array.from(value)))
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
+  { getOnInit: true },
 )

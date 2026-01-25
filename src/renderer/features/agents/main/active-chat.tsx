@@ -40,7 +40,6 @@ import {
   ArrowDown,
   ChevronDown,
   ListTree,
-  TerminalSquare
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import {
@@ -80,6 +79,10 @@ import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
+import { sessionFlowSidebarOpenAtom } from "../../session-flow/atoms"
+import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
+import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
+import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -3960,6 +3963,9 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(
     terminalSidebarOpenAtom,
   )
+  const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
+    sessionFlowSidebarOpenAtom,
+  )
   const [diffStats, setDiffStatsRaw] = useState({
     fileCount: 0,
     additions: 0,
@@ -3998,6 +4004,39 @@ export function ChatView({
   const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
 
+  // Scroll to a specific message (used by session flow panel)
+  const handleScrollToMessage = useCallback(
+    (messageId: string, _partIndex?: number) => {
+      // Find the active chat container (looks for the visible sub-chat container)
+      const container = document.querySelector('[data-chat-container]') as HTMLElement
+      if (!container) return
+
+      // Find the message element
+      const selector = `[data-message-id="${messageId}"]`
+      const targetElement = container.querySelector(selector)
+
+      if (targetElement) {
+        // Check if this is inside a sticky user message container
+        const stickyParent = targetElement.closest("[data-user-message-id]")
+        if (stickyParent) {
+          const messageGroupWrapper = stickyParent.parentElement
+          if (messageGroupWrapper) {
+            messageGroupWrapper.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            })
+            return
+          }
+        }
+
+        targetElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        })
+      }
+    },
+    [],
+  )
 
   // Force narrow width when switching to side-peek mode (from dialog/fullscreen)
   useEffect(() => {
@@ -5558,8 +5597,6 @@ Make sure to preserve all functionality from both branches when resolving confli
                         canOpenPreview={canOpenPreview}
                         onOpenDiff={() => setIsDiffSidebarOpen(true)}
                         canOpenDiff={canOpenDiff}
-                        isDiffSidebarOpen={isDiffSidebarOpen}
-                        diffStats={diffStats}
                       />
                     </>
                   )}
@@ -5598,28 +5635,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </span>
                     </PreviewSetupHoverCard>
                   ))}
-                {/* Terminal Button - shows when terminal is closed and worktree exists (desktop only) */}
-                {!isMobileFullscreen &&
-                  !isTerminalSidebarOpen &&
-                  worktreePath && (
-                    <Tooltip delayDuration={500}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setIsTerminalSidebarOpen(true)}
-                          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
-                          aria-label="Open terminal"
-                        >
-                          <TerminalSquare className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        Open terminal
-                        <Kbd>⌘J</Kbd>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                {/* Terminal and Session Flow buttons moved to right icon bar */}
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
                   <Tooltip delayDuration={500}>
@@ -5908,14 +5924,21 @@ Make sure to preserve all functionality from both branches when resolving confli
           </ResizableSidebar>
         )}
 
-        {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
-        {worktreePath && (
-          <TerminalSidebar
-            chatId={chatId}
-            cwd={worktreePath}
-            workspaceId={chatId}
-          />
-        )}
+        {/* Terminal Sidebar - always available with smart default directory */}
+        <TerminalSidebar
+          chatId={chatId}
+          cwd={worktreePath || originalProjectPath || "~"}
+          workspaceId={chatId}
+        />
+
+        {/* Session Flow Sidebar - shows session execution flow */}
+        <SessionFlowSidebar onScrollToMessage={handleScrollToMessage} />
+
+        {/* Session Flow Dialog - modal view */}
+        <SessionFlowDialog onScrollToMessage={handleScrollToMessage} />
+
+        {/* Session Flow Full Screen - full screen view */}
+        <SessionFlowFullScreen onScrollToMessage={handleScrollToMessage} />
       </div>
     </div>
   )

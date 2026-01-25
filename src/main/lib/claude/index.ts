@@ -15,3 +15,13 @@ export {
 export { TextDeltaBuffer } from "./text-delta-buffer"
 export { checkOfflineFallback } from "./offline-handler"
 export type { OfflineCheckResult, CustomClaudeConfig } from "./offline-handler"
+export {
+  initBackgroundSession,
+  closeBackgroundSession,
+  resetBackgroundSession,
+  getBackgroundSessionState,
+  isBackgroundSessionReady,
+  queryBackgroundSession,
+  generateChatTitle,
+} from "./background-session"
+export type { BackgroundSessionState } from "./background-session"

@@ -57,8 +57,12 @@ export function createK8sClient(
   cluster: EksClusterInfo,
   token: string
 ): KubernetesClient {
+  // Disable certificate validation for EKS self-signed certificates
+  // kubernetesjs doesn't support custom CA certificates, so we have to disable validation
+  // Security note: EKS API requests are still authenticated via IAM tokens
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+
   // kubernetesjs expects just the endpoint URL
-  // We need to handle the CA certificate separately via a custom fetch
   const client = new KubernetesClient({
     restEndpoint: cluster.endpoint,
   })

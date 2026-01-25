@@ -3,6 +3,8 @@ import { router, publicProcedure } from "../index"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
+import { eq } from "drizzle-orm"
+import { getDatabase, configSources } from "../../db"
 import {
   parseAgentMd,
   generateAgentMd,
@@ -10,7 +12,34 @@ import {
   VALID_AGENT_MODELS,
   type FileAgent,
 } from "./agent-utils"
-import { getScanLocations } from "./devyard-scan-helper"
+
+/**
+ * Get directories to scan for agents (built-in locations)
+ */
+function getScanLocations(type: string, cwd?: string) {
+  const homeDir = os.homedir()
+  const userDir = path.join(homeDir, ".claude", type)
+  const projectDir = cwd ? path.join(cwd, ".claude", type) : null
+
+  return { userDir, projectDir }
+}
+
+/**
+ * Get custom plugin directories from database
+ * These directories contain agents/, skills/, commands/ subdirectories
+ */
+function getCustomPluginDirectories(): Array<{ path: string; priority: number }> {
+  const db = getDatabase()
+  const sources = db
+    .select()
+    .from(configSources)
+    .where(eq(configSources.type, "plugin"))
+    .orderBy(configSources.priority)
+    .all()
+    .filter((s) => s.enabled)
+
+  return sources.map((s) => ({ path: s.path, priority: s.priority }))
+}
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -24,19 +53,42 @@ const listAgentsProcedure = publicProcedure
   .query(async ({ input }) => {
     const locations = getScanLocations("agents", input?.cwd)
 
-    // Scan all three directories in parallel
-    const [userAgents, projectAgents, devyardAgents] = await Promise.all([
-      scanAgentsDirectory(locations.userDir, "user"),
-      locations.projectDir
-        ? scanAgentsDirectory(locations.projectDir, "project")
-        : Promise.resolve<FileAgent[]>([]),
-      locations.devyardDir
-        ? scanAgentsDirectory(locations.devyardDir, "devyard")
-        : Promise.resolve<FileAgent[]>([]),
-    ])
+    // Get custom plugin directories from database
+    const customDirs = getCustomPluginDirectories()
 
-    // Return all agents, priority: project > devyard > user
-    return [...projectAgents, ...devyardAgents, ...userAgents]
+    // Scan all directories in parallel
+    const scanPromises: Promise<FileAgent[]>[] = []
+
+    // Project agents (highest priority)
+    if (locations.projectDir) {
+      scanPromises.push(scanAgentsDirectory(locations.projectDir, "project"))
+    }
+
+    // User agents
+    scanPromises.push(scanAgentsDirectory(locations.userDir, "user"))
+
+    // Custom plugin directories (scan agents/ subdirectory)
+    for (const customDir of customDirs) {
+      const agentsDir = path.join(customDir.path, "agents")
+      scanPromises.push(scanAgentsDirectory(agentsDir, "custom"))
+    }
+
+    const results = await Promise.all(scanPromises)
+
+    // Flatten results and deduplicate by name (first source wins)
+    const seenNames = new Set<string>()
+    const agents: FileAgent[] = []
+
+    for (const agentList of results) {
+      for (const agent of agentList) {
+        if (!seenNames.has(agent.name)) {
+          seenNames.add(agent.name)
+          agents.push(agent)
+        }
+      }
+    }
+
+    return agents
   })
 
 export const agentsRouter = router({
@@ -63,7 +115,6 @@ export const agentsRouter = router({
       const locations = [
         { dir: scanLocs.userDir, source: "user" as const },
         ...(scanLocs.projectDir ? [{ dir: scanLocs.projectDir, source: "project" as const }] : []),
-        ...(scanLocs.devyardDir ? [{ dir: scanLocs.devyardDir, source: "devyard" as const }] : []),
       ]
 
       for (const { dir, source } of locations) {
@@ -265,5 +316,46 @@ export const agentsRouter = router({
       await fs.unlink(agentPath)
 
       return { deleted: true }
+    }),
+
+  /**
+   * Read the content of an agent file
+   * Used by the agent detail view to show raw markdown content
+   */
+  readFileContent: publicProcedure
+    .input(z.object({ path: z.string() }))
+    .query(async ({ input }) => {
+      const homeDir = os.homedir()
+      const claudeDir = path.join(homeDir, ".claude")
+
+      // Security: resolve both paths and ensure target is within allowed directories
+      const resolvedTarget = path.resolve(input.path)
+      const resolvedClaudeDir = path.resolve(claudeDir)
+
+      // Check if path is within ~/.claude/ or is a valid project .claude path
+      const isInClaudeDir = resolvedTarget.startsWith(resolvedClaudeDir)
+      const isInProjectClaudeDir = resolvedTarget.includes(`${path.sep}.claude${path.sep}agents${path.sep}`)
+
+      if (!isInClaudeDir && !isInProjectClaudeDir) {
+        throw new Error("Access denied: path is outside allowed directories")
+      }
+
+      // Path traversal check
+      if (input.path.includes("..")) {
+        throw new Error("Access denied: path traversal detected")
+      }
+
+      // Check if path is a file (not a directory)
+      try {
+        const stats = await fs.stat(resolvedTarget)
+        if (!stats.isFile()) {
+          throw new Error("Path is not a file")
+        }
+      } catch (err) {
+        throw new Error(`File not found: ${input.path}`)
+      }
+
+      // Read and return file content
+      return await fs.readFile(resolvedTarget, "utf-8")
     }),
 })

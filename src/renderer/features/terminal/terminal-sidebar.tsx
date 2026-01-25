@@ -108,22 +108,25 @@ export function TerminalSidebar({
   }, [isDark, fullThemeData])
 
   // Get terminals for this chat
-  const terminals = useMemo(
-    () => allTerminals[chatId] || [],
-    [allTerminals, chatId],
-  )
+  const terminals = useMemo(() => {
+    const result = allTerminals[chatId] || []
+    console.log("[TerminalSidebar] Terminals for chatId", chatId, ":", result)
+    return result
+  }, [allTerminals, chatId])
 
   // Get active terminal ID for this chat
-  const activeTerminalId = useMemo(
-    () => allActiveIds[chatId] || null,
-    [allActiveIds, chatId],
-  )
+  const activeTerminalId = useMemo(() => {
+    const result = allActiveIds[chatId] || null
+    console.log("[TerminalSidebar] Active terminal ID for chatId", chatId, ":", result)
+    return result
+  }, [allActiveIds, chatId])
 
   // Get the active terminal instance
-  const activeTerminal = useMemo(
-    () => terminals.find((t) => t.id === activeTerminalId) || null,
-    [terminals, activeTerminalId],
-  )
+  const activeTerminal = useMemo(() => {
+    const result = terminals.find((t) => t.id === activeTerminalId) || null
+    console.log("[TerminalSidebar] Active terminal:", result)
+    return result
+  }, [terminals, activeTerminalId])
 
   // tRPC mutation for killing terminal sessions
   const killMutation = trpc.terminal.kill.useMutation()
@@ -298,17 +301,32 @@ export function TerminalSidebar({
   const [canRenderTerminal, setCanRenderTerminal] = useState(false)
   const wasOpenRef = useRef(false)
 
+  // Initialize canRenderTerminal on mount if sidebar is already open
   useEffect(() => {
+    console.log("[TerminalSidebar] Mount effect - isOpen:", isOpen)
+    if (isOpen && !wasOpenRef.current) {
+      console.log("[TerminalSidebar] Sidebar already open on mount, enabling terminal render")
+      setCanRenderTerminal(true)
+      wasOpenRef.current = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount
+
+  useEffect(() => {
+    console.log("[TerminalSidebar] Render delay effect - isOpen:", isOpen, "wasOpen:", wasOpenRef.current)
     if (isOpen && !wasOpenRef.current) {
       // Sidebar just opened - delay terminal render until animation completes
+      console.log("[TerminalSidebar] Sidebar opened, delaying render for", SIDEBAR_ANIMATION_DURATION_MS + ANIMATION_BUFFER_MS, "ms")
       setCanRenderTerminal(false)
       const timer = setTimeout(() => {
+        console.log("[TerminalSidebar] Render delay complete, enabling terminal render")
         setCanRenderTerminal(true)
       }, SIDEBAR_ANIMATION_DURATION_MS + ANIMATION_BUFFER_MS)
       wasOpenRef.current = true
       return () => clearTimeout(timer)
     } else if (!isOpen) {
       // Sidebar closed - reset state
+      console.log("[TerminalSidebar] Sidebar closed, resetting state")
       wasOpenRef.current = false
       setCanRenderTerminal(false)
     }
@@ -316,7 +334,9 @@ export function TerminalSidebar({
 
   // Auto-create first terminal when sidebar opens and no terminals exist
   useEffect(() => {
+    console.log("[TerminalSidebar] Auto-create check - isOpen:", isOpen, "terminals.length:", terminals.length)
     if (isOpen && terminals.length === 0) {
+      console.log("[TerminalSidebar] Auto-creating first terminal")
       createTerminal()
     }
   }, [isOpen, terminals.length, createTerminal])
@@ -401,28 +421,31 @@ export function TerminalSidebar({
           className="flex-1 min-h-0 min-w-0 overflow-hidden"
           style={{ backgroundColor: terminalBg }}
         >
-          {activeTerminal && canRenderTerminal ? (
-            <motion.div
-              key={activeTerminal.paneId}
-              className="h-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0 }}
-            >
-              <Terminal
-                paneId={activeTerminal.paneId}
-                cwd={cwd}
-                workspaceId={workspaceId}
-                tabId={tabId}
-                initialCommands={initialCommands}
-                initialCwd={cwd}
-              />
-            </motion.div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {!canRenderTerminal ? "" : "No terminal open"}
-            </div>
-          )}
+          {(() => {
+            console.log("[TerminalSidebar] Render check - activeTerminal:", activeTerminal?.paneId, "canRender:", canRenderTerminal)
+            return activeTerminal && canRenderTerminal ? (
+              <motion.div
+                key={activeTerminal.paneId}
+                className="h-full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0 }}
+              >
+                <Terminal
+                  paneId={activeTerminal.paneId}
+                  cwd={cwd}
+                  workspaceId={workspaceId}
+                  tabId={tabId}
+                  initialCommands={initialCommands}
+                  initialCwd={cwd}
+                />
+              </motion.div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                {!canRenderTerminal ? "" : "No terminal open"}
+              </div>
+            )
+          })()}
         </div>
       </div>
     )
@@ -494,28 +517,31 @@ export function TerminalSidebar({
           className="flex-1 min-h-0 min-w-0 overflow-hidden"
           style={{ backgroundColor: terminalBg }}
         >
-          {activeTerminal && canRenderTerminal ? (
-            <motion.div
-              key={activeTerminal.paneId}
-              className="h-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0 }}
-            >
-              <Terminal
-                paneId={activeTerminal.paneId}
-                cwd={cwd}
-                workspaceId={workspaceId}
-                tabId={tabId}
-                initialCommands={initialCommands}
-                initialCwd={cwd}
-              />
-            </motion.div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {!canRenderTerminal ? "" : "No terminal open"}
-            </div>
-          )}
+          {(() => {
+            console.log("[TerminalSidebar] Render check - activeTerminal:", activeTerminal?.paneId, "canRender:", canRenderTerminal)
+            return activeTerminal && canRenderTerminal ? (
+              <motion.div
+                key={activeTerminal.paneId}
+                className="h-full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0 }}
+              >
+                <Terminal
+                  paneId={activeTerminal.paneId}
+                  cwd={cwd}
+                  workspaceId={workspaceId}
+                  tabId={tabId}
+                  initialCommands={initialCommands}
+                  initialCwd={cwd}
+                />
+              </motion.div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                {!canRenderTerminal ? "" : "No terminal open"}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </ResizableSidebar>

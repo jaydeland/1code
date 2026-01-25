@@ -4,6 +4,13 @@ import { app, shell } from "electron"
 import { getAuthManager } from "../../../index"
 import { z } from "zod"
 import { clearNetworkCache } from "../../ollama/network-detector"
+import {
+  getBackgroundSessionState,
+  initBackgroundSession,
+  resetBackgroundSession,
+  generateChatTitle,
+  type BackgroundSessionState,
+} from "../../claude/background-session"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -102,5 +109,38 @@ export const debugRouter = router({
       clearNetworkCache()
       console.log(`[Debug] Offline simulation ${input.enabled ? "enabled" : "disabled"}`)
       return { success: true, enabled: simulateOfflineMode }
+    }),
+
+  /**
+   * Get background session state
+   */
+  getBackgroundSessionState: publicProcedure.query((): BackgroundSessionState => {
+    return getBackgroundSessionState()
+  }),
+
+  /**
+   * Initialize background session (manually)
+   */
+  initBackgroundSession: publicProcedure.mutation(async () => {
+    const state = await initBackgroundSession()
+    return state
+  }),
+
+  /**
+   * Reset background session
+   */
+  resetBackgroundSession: publicProcedure.mutation(async () => {
+    await resetBackgroundSession()
+    return { success: true }
+  }),
+
+  /**
+   * Test title generation using background session
+   */
+  testTitleGeneration: publicProcedure
+    .input(z.object({ message: z.string() }))
+    .mutation(async ({ input }) => {
+      const title = await generateChatTitle(input.message)
+      return { title }
     }),
 })

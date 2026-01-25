@@ -20,6 +20,7 @@ import {
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
 import { cleanupGitWatchers } from "./lib/git/watcher"
+import { initBackgroundSession, closeBackgroundSession } from "./lib/claude/background-session"
 
 // Dev mode detection
 const IS_DEV = !!process.env.ELECTRON_RENDERER_URL
@@ -625,6 +626,58 @@ if (gotTheLock) {
       console.error("[App] Failed to initialize database:", error)
     }
 
+    // Run data migrations (after database schema is ready)
+    try {
+      const { getDatabase, appSettings } = await import("./lib/db")
+      const { eq } = await import("drizzle-orm")
+      const { migrateWorktreeLocations } = await import(
+        "./lib/migrations/worktree-location-migration"
+      )
+
+      const db = getDatabase()
+
+      // Get or create app settings
+      let settings = db.select().from(appSettings).get()
+      if (!settings) {
+        console.log("[App] Creating initial app settings")
+        db.insert(appSettings)
+          .values({
+            id: "default",
+            lastMigrationVersion: null,
+            updatedAt: new Date(),
+          })
+          .run()
+        settings = db.select().from(appSettings).get()
+      }
+
+      // Check if worktree migration needs to run
+      const WORKTREE_MIGRATION_VERSION = "0.1.0"
+      if (
+        !settings?.lastMigrationVersion ||
+        settings.lastMigrationVersion < WORKTREE_MIGRATION_VERSION
+      ) {
+        console.log("[App] Running worktree location migration...")
+        const migratedCount = await migrateWorktreeLocations()
+
+        // Update migration version
+        db.update(appSettings)
+          .set({
+            lastMigrationVersion: WORKTREE_MIGRATION_VERSION,
+            updatedAt: new Date(),
+          })
+          .where(eq(appSettings.id, "default"))
+          .run()
+
+        console.log(
+          `[App] Worktree migration complete (${migratedCount} chats updated)`,
+        )
+      } else {
+        console.log("[App] Worktree migration already applied, skipping")
+      }
+    } catch (error) {
+      console.error("[App] Failed to run data migrations:", error)
+    }
+
     // Create main window
     createMainWindow()
 
@@ -649,6 +702,19 @@ if (gotTheLock) {
         console.error("[App] MCP warmup failed:", error)
       }
     }, 3000)
+
+    // Initialize background Claude session 5 seconds after startup (dev mode only for now)
+    // This provides a persistent session for utility tasks like title generation
+    if (IS_DEV) {
+      setTimeout(async () => {
+        try {
+          console.log("[App] Initializing background Claude session...")
+          await initBackgroundSession()
+        } catch (error) {
+          console.error("[App] Background session initialization failed:", error)
+        }
+      }, 5000)
+    }
 
     // Handle deep link from app launch (Windows/Linux)
     const deepLinkUrl = process.argv.find((arg) =>
@@ -677,6 +743,7 @@ if (gotTheLock) {
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
     await cleanupGitWatchers()
+    await closeBackgroundSession()
     await shutdownAnalytics()
     await closeDatabase()
   })

@@ -108,7 +108,7 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   customConfigDir: text("custom_config_dir"), // Path to Claude config dir (null = use per-subchat isolated)
   customWorktreeLocation: text("custom_worktree_location"), // Custom base path for worktrees with env var support (null = use ~/.21st/worktrees)
   mcpServerSettings: text("mcp_server_settings").notNull().default("{}"), // JSON object of MCP server overrides
-  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "aws" | "apiKey" | "devyard"
+  authMode: text("auth_mode").notNull().default("oauth"), // "oauth" | "aws" | "apiKey"
   apiKey: text("api_key"), // API key for apiKey mode (encrypted)
   bedrockRegion: text("bedrock_region").notNull().default("us-east-1"), // AWS region for Bedrock
   anthropicBaseUrl: text("anthropic_base_url"), // Custom Anthropic API base URL (for API key mode)
@@ -144,6 +144,10 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   awsSecretAccessKey: text("aws_secret_access_key"),
   awsSessionToken: text("aws_session_token"),
   awsCredentialsExpiresAt: integer("aws_credentials_expires_at", { mode: "timestamp" }),
+
+  // VPN connectivity check
+  vpnCheckEnabled: integer("vpn_check_enabled", { mode: "boolean" }).notNull().default(false), // Enable/disable VPN status monitoring
+  vpnCheckUrl: text("vpn_check_url"), // Internal URL to check for VPN connectivity (e.g., https://internal.company.com)
 })
 
 // ============ MCP SERVER CREDENTIALS ============
@@ -151,6 +155,31 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
 export const mcpCredentials = sqliteTable("mcp_credentials", {
   id: text("id").primaryKey(), // Server name from mcp.json
   credentials: text("credentials").notNull().default("{}"), // JSON object of encrypted credentials
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+// ============ CONFIG SOURCES ============
+// Stores custom configuration file paths (mcp.json files and plugin directories)
+export const configSources = sqliteTable("config_sources", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  type: text("type", { enum: ["mcp", "plugin"] }).notNull(), // Type of configuration source
+  path: text("path").notNull(), // Absolute path to the config file or directory
+  priority: integer("priority").notNull().default(50), // Lower = higher priority (project=10, user=100, custom=50+)
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true), // Whether this source is active
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+// ============ APP SETTINGS ============
+// Stores application-level settings and migration tracking
+export const appSettings = sqliteTable("app_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  lastMigrationVersion: text("last_migration_version"), // Tracks last applied migration version (for data migrations)
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
@@ -169,3 +198,7 @@ export type ClaudeCodeSettings = typeof claudeCodeSettings.$inferSelect
 export type NewClaudeCodeSettings = typeof claudeCodeSettings.$inferInsert
 export type McpCredential = typeof mcpCredentials.$inferSelect
 export type NewMcpCredential = typeof mcpCredentials.$inferInsert
+export type ConfigSource = typeof configSources.$inferSelect
+export type NewConfigSource = typeof configSources.$inferInsert
+export type AppSettings = typeof appSettings.$inferSelect
+export type NewAppSettings = typeof appSettings.$inferInsert
