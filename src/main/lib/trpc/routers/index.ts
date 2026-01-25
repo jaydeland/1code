@@ -19,6 +19,7 @@ import { awsSsoRouter } from "./aws-sso"
 import { configManagementRouter } from "./config-management"
 import { clustersRouter } from "./clusters"
 import { claudeVersionsRouter } from "./claude-versions"
+import { voiceRouter } from "./voice"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -48,6 +49,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     configManagement: configManagementRouter,
     clusters: clustersRouter,
     claudeVersions: claudeVersionsRouter,
+    voice: voiceRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
