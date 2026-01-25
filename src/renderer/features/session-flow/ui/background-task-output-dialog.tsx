@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useState } from "react"
+import { memo, useCallback, useState, useEffect, useRef } from "react"
 import { useAtom } from "jotai"
 import {
   Dialog,
@@ -18,6 +18,11 @@ import {
   backgroundTaskOutputDialogOpenAtom,
 } from "../atoms"
 
+interface BackgroundTaskOutputDialogProps {
+  /** Chat ID - dialog closes when this changes */
+  chatId?: string
+}
+
 // Format duration in human-readable format
 function formatDuration(ms?: number): string {
   if (!ms || ms < 1000) return ""
@@ -29,10 +34,22 @@ function formatDuration(ms?: number): string {
   return `${minutes}m ${remainingSeconds}s`
 }
 
-export const BackgroundTaskOutputDialog = memo(function BackgroundTaskOutputDialog() {
+export const BackgroundTaskOutputDialog = memo(function BackgroundTaskOutputDialog({
+  chatId,
+}: BackgroundTaskOutputDialogProps) {
   const [open, setOpen] = useAtom(backgroundTaskOutputDialogOpenAtom)
   const [selectedTask, setSelectedTask] = useAtom(selectedBackgroundTaskAtom)
   const [copied, setCopied] = useState(false)
+  const prevChatIdRef = useRef(chatId)
+
+  // Close dialog when chat changes to prevent showing stale data
+  useEffect(() => {
+    if (prevChatIdRef.current !== chatId && open) {
+      setOpen(false)
+      setSelectedTask(null)
+    }
+    prevChatIdRef.current = chatId
+  }, [chatId, open, setOpen, setSelectedTask])
 
   const handleClose = useCallback(() => {
     setOpen(false)

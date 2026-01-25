@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useState } from "react"
+import { memo, useCallback, useState, useEffect, useRef } from "react"
 import { useAtom } from "jotai"
 import {
   Dialog,
@@ -19,6 +19,11 @@ import {
   subAgentOutputDialogOpenAtom,
 } from "../atoms"
 
+interface SubAgentOutputDialogProps {
+  /** Chat ID - dialog closes when this changes */
+  chatId?: string
+}
+
 // Format duration in human-readable format
 function formatDuration(ms?: number): string {
   if (!ms || ms < 1000) return ""
@@ -30,10 +35,22 @@ function formatDuration(ms?: number): string {
   return `${minutes}m ${remainingSeconds}s`
 }
 
-export const SubAgentOutputDialog = memo(function SubAgentOutputDialog() {
+export const SubAgentOutputDialog = memo(function SubAgentOutputDialog({
+  chatId,
+}: SubAgentOutputDialogProps) {
   const [open, setOpen] = useAtom(subAgentOutputDialogOpenAtom)
   const [selectedAgent, setSelectedAgent] = useAtom(selectedSubAgentAtom)
   const [copied, setCopied] = useState(false)
+  const prevChatIdRef = useRef(chatId)
+
+  // Close dialog when chat changes to prevent showing stale data
+  useEffect(() => {
+    if (prevChatIdRef.current !== chatId && open) {
+      setOpen(false)
+      setSelectedAgent(null)
+    }
+    prevChatIdRef.current = chatId
+  }, [chatId, open, setOpen, setSelectedAgent])
 
   const handleClose = useCallback(() => {
     setOpen(false)

@@ -83,6 +83,8 @@ import { sessionFlowSidebarOpenAtom } from "../../session-flow/atoms"
 import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
 import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
 import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
+import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
+import { BackgroundTaskOutputDialog } from "../../session-flow/ui/background-task-output-dialog"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
@@ -5939,6 +5941,11 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Session Flow Full Screen - full screen view */}
         <SessionFlowFullScreen onScrollToMessage={handleScrollToMessage} />
+
+        {/* Sub-agent and Background Task output dialogs - rendered here to stay mounted */}
+        {/* These must be outside SessionFlowSidebar to prevent unmount issues when sidebar closes */}
+        <SubAgentOutputDialog chatId={chatId} />
+        <BackgroundTaskOutputDialog chatId={chatId} />
       </div>
     </div>
   )

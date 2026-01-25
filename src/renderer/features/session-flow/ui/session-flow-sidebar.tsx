@@ -14,8 +14,10 @@ import { SessionFlowPanel } from "./session-flow-panel"
 import { SessionFlowTodos } from "./session-flow-todos"
 import { SessionSubAgentsList } from "./session-sub-agents-list"
 import { SessionBackgroundTasksList } from "./session-background-tasks-list"
-import { SubAgentOutputDialog } from "./sub-agent-output-dialog"
-import { BackgroundTaskOutputDialog } from "./background-task-output-dialog"
+// NOTE: SubAgentOutputDialog and BackgroundTaskOutputDialog are now rendered in active-chat.tsx
+// They were moved outside the ResizableSidebar to ensure they remain mounted when the sidebar closes.
+// This prevents issues where the dialog state (Jotai atoms) would persist but the component would unmount,
+// causing problems when the sidebar reopens with stale dialog state.
 import {
   sessionFlowSidebarOpenAtom,
   sessionFlowSidebarWidthAtom,
@@ -322,11 +324,7 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
           </div>
         </div>
 
-        {/* Sub-agent output dialog */}
-        <SubAgentOutputDialog />
-
-        {/* Background task output dialog */}
-        <BackgroundTaskOutputDialog />
+        {/* NOTE: Dialogs moved to active-chat.tsx to prevent mount/unmount issues */}
       </div>
     </ResizableSidebar>
   )
