@@ -83,6 +83,32 @@ export const claudeSettingsRouter = router({
         bedrockRegion: "us-east-1",
         anthropicBaseUrl: null,
         updatedAt: new Date(),
+        // Bedrock fields (will be set by migration)
+        bedrockOpusModel: "global.anthropic.claude-opus-4-5-20251101-v1:0",
+        bedrockSonnetModel: "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
+        bedrockHaikuModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
+        maxMcpOutputTokens: 200000,
+        maxThinkingTokens: 1000000,
+        // SSO fields (not used in fallback)
+        bedrockConnectionMethod: null,
+        awsProfileName: null,
+        ssoStartUrl: null,
+        ssoRegion: null,
+        ssoAccountId: null,
+        ssoAccountName: null,
+        ssoRoleName: null,
+        ssoAccessToken: null,
+        ssoRefreshToken: null,
+        ssoTokenExpiresAt: null,
+        ssoClientId: null,
+        ssoClientSecret: null,
+        ssoClientExpiresAt: null,
+        awsAccessKeyId: null,
+        awsSecretAccessKey: null,
+        awsSessionToken: null,
+        awsCredentialsExpiresAt: null,
+        vpnCheckEnabled: false,
+        vpnCheckUrl: null,
       }
     }
 
