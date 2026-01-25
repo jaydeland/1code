@@ -22,12 +22,17 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog"
 import { trpc } from "../../../lib/trpc"
+import { Switch } from "../../../components/ui/switch"
 
 interface AwsSsoSectionProps {
   bedrockRegion: string
   onBedrockRegionChange: (region: string) => void
   onSave: () => void
   isSaving: boolean
+  vpnCheckEnabled?: boolean
+  onVpnCheckEnabledChange: (enabled: boolean) => void
+  vpnCheckUrl?: string | null
+  onVpnCheckUrlChange: (url: string) => void
 }
 
 type ConnectionMethod = "sso" | "profile"
@@ -83,6 +88,10 @@ export function AwsSsoSection({
   onBedrockRegionChange,
   onSave,
   isSaving,
+  vpnCheckEnabled,
+  onVpnCheckEnabledChange,
+  vpnCheckUrl,
+  onVpnCheckUrlChange,
 }: AwsSsoSectionProps) {
   const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>("sso")
   const [ssoStartUrl, setSsoStartUrl] = useState("")
@@ -495,29 +504,34 @@ export function AwsSsoSection({
               )}
 
               {/* Current Selection Status */}
-              {ssoStatus?.hasCredentials && (
+              {ssoStatus?.authenticated && (ssoStatus?.accountId || ssoStatus?.roleName) && (
                 <div className="p-3 bg-background rounded-lg space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Account:</span>
-                    <span className="font-mono">
-                      {ssoStatus.accountName} ({ssoStatus.accountId})
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Role:</span>
-                    <span className="font-mono">{ssoStatus.roleName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Credentials Expire:</span>
-                    <span className={
-                      ssoStatus.credentialsExpiresAt &&
-                      new Date(ssoStatus.credentialsExpiresAt).getTime() - Date.now() < 3600000
-                        ? "text-yellow-500"
-                        : ""
-                    }>
-                      {formatExpirationTime(ssoStatus.credentialsExpiresAt)}
-                    </span>
-                  </div>
+                  {ssoStatus.accountId && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Account:</span>
+                      <span className="font-mono">
+                        {ssoStatus.accountName} ({ssoStatus.accountId})
+                      </span>
+                    </div>
+                  )}
+                  {ssoStatus.roleName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Role:</span>
+                      <span className="font-mono">{ssoStatus.roleName}</span>
+                    </div>
+                  )}
+                  {ssoStatus.hasCredentials && ssoStatus.credentialsExpiresAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Credentials Expire:</span>
+                      <span className={
+                        new Date(ssoStatus.credentialsExpiresAt).getTime() - Date.now() < 3600000
+                          ? "text-yellow-500"
+                          : ""
+                      }>
+                        {formatExpirationTime(ssoStatus.credentialsExpiresAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -598,6 +612,40 @@ export function AwsSsoSection({
           AWS region to use for Bedrock API calls (must have Claude models enabled)
         </p>
       </div>
+
+      {/* VPN Check Toggle */}
+      <div className="flex items-center justify-between space-x-4 p-3 bg-muted/50 rounded-lg">
+        <div className="flex-1 space-y-1">
+          <Label className="text-sm font-medium">AWS VPN Status Monitor</Label>
+          <p className="text-xs text-muted-foreground">
+            Monitor AWS VPN connectivity in the status bar. Checks connectivity to AWS internal resources.
+          </p>
+        </div>
+        <Switch
+          checked={vpnCheckEnabled || false}
+          onCheckedChange={onVpnCheckEnabledChange}
+        />
+      </div>
+
+      {/* VPN Check URL - shown only when VPN check is enabled */}
+      {vpnCheckEnabled && (
+        <div className="space-y-2">
+          <Label htmlFor="vpn-check-url" className="text-sm">
+            Internal URL to Check
+          </Label>
+          <Input
+            id="vpn-check-url"
+            type="url"
+            placeholder="https://internal.company.com"
+            value={vpnCheckUrl || ""}
+            onChange={(e) => onVpnCheckUrlChange(e.target.value)}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter an internal URL that's only accessible via VPN (e.g., internal load balancer, private DNS name)
+          </p>
+        </div>
+      )}
 
       {/* Save Button */}
       <div className="flex justify-end pt-2">

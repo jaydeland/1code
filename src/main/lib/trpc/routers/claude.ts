@@ -20,6 +20,7 @@ import { createRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../../ollama"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
+import { getMergedMcpConfig } from "../../config/consolidator"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -141,12 +142,6 @@ const activeSessions = new Map<string, AbortController>()
 
 // Cache for symlinks (track which subChatIds have already set up symlinks)
 const symlinksCreated = new Set<string>()
-
-// Cache for MCP config (avoid re-reading ~/.claude.json on every message)
-const mcpConfigCache = new Map<string, {
-  config: Record<string, any> | undefined
-  mtime: number
-}>()
 
 // Cache for MCP server statuses (to filter out failed/needs-auth servers)
 // Maps project path -> server name -> status
@@ -314,7 +309,6 @@ function saveMcpStatusToDisk(): void {
 export function clearClaudeCaches() {
   cachedClaudeQuery = null
   symlinksCreated.clear()
-  mcpConfigCache.clear()
   mcpServerStatusCache.clear()
   diskCacheLastLoadTime = 0
 
@@ -440,6 +434,65 @@ export async function warmupMcpCache(): Promise<void> {
 }
 
 export const claudeRouter = router({
+  /**
+   * Get Claude SDK version and available models
+   */
+  getVersionInfo: publicProcedure.query(async () => {
+    // Get SDK version from package.json
+    const packageJsonPath = path.join(app.getAppPath(), 'package.json')
+    let sdkVersion = 'unknown'
+
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+      sdkVersion = packageJson.dependencies?.['@anthropic-ai/claude-agent-sdk']?.replace(/^\^/, '') || 'unknown'
+    } catch (error) {
+      console.error('[claude] Failed to read SDK version:', error)
+    }
+
+    // Get Claude binary version
+    let binaryVersion = 'unknown'
+    try {
+      const { execSync } = await import('child_process')
+      const output = execSync('claude --version', { encoding: 'utf-8', timeout: 5000 })
+      // Parse output like "claude 2.1.5"
+      const match = output.trim().match(/claude\s+(\S+)/)
+      binaryVersion = match ? match[1] : output.trim()
+    } catch (error: any) {
+      console.error('[claude] Failed to get binary version:', error.message)
+      binaryVersion = 'Not installed or not in PATH'
+    }
+
+    // Available models (from env.ts defaults)
+    const availableModels = [
+      {
+        id: 'opus-4-5',
+        name: 'Claude Opus 4.5',
+        description: 'Most capable model for complex tasks',
+        modelId: 'claude-opus-4-5-20251101',
+      },
+      {
+        id: 'sonnet-4-5',
+        name: 'Claude Sonnet 4.5',
+        description: 'Balanced performance and speed with 1M context',
+        modelId: 'claude-sonnet-4-5-20250929',
+        contextWindow: '1M',
+      },
+      {
+        id: 'haiku-4-5',
+        name: 'Claude Haiku 4.5',
+        description: 'Fastest model for quick tasks with 1M context',
+        modelId: 'claude-haiku-4-5-20251001',
+        contextWindow: '1M',
+      },
+    ]
+
+    return {
+      sdkVersion,
+      binaryVersion,
+      availableModels,
+    }
+  }),
+
   /**
    * Stream chat with Claude - single subscription handles everything
    */
@@ -724,7 +777,7 @@ export const claudeRouter = router({
               isUsingOllama ? input.chatId : input.subChatId
             )
 
-            // MCP servers to pass to SDK (read from ~/.claude.json)
+            // MCP servers to pass to SDK (merged from all config sources)
             let mcpServersForSdk: Record<string, any> | undefined
 
             // Ensure isolated config dir exists and symlink skills/agents from ~/.claude/
@@ -767,43 +820,14 @@ export const claudeRouter = router({
                 symlinksCreated.add(cacheKey)
               }
 
-              // Read MCP servers from ~/.claude.json for the original project path
-              // These will be passed directly to the SDK via options.mcpServers
-              // OPTIMIZATION: Cache MCP config by file mtime to avoid re-parsing on every message
-              const claudeJsonSource = path.join(os.homedir(), ".claude.json")
+              // Get merged MCP config from all sources (project, custom, user, custom)
+              // This consolidates configs in priority order: project (10) → custom (20) → user (100)
               try {
-                const stats = await fs.stat(claudeJsonSource).catch(() => null)
-
-                if (stats) {
-                  const currentMtime = stats.mtimeMs
-                  const cached = mcpConfigCache.get(claudeJsonSource)
-                  const lookupPath = input.projectPath || input.cwd
-
-                  // Check if we have a valid cache entry
-                  if (cached && cached.mtime === currentMtime) {
-                    mcpServersForSdk = cached.config?.[lookupPath]
-                  } else {
-                    // Read and parse config
-                    const originalConfig = JSON.parse(await fs.readFile(claudeJsonSource, "utf-8"))
-
-                    // Cache the projects config by lookup path
-                    const projectsConfig: Record<string, any> = {}
-                    for (const [projPath, projConfig] of Object.entries(originalConfig.projects || {})) {
-                      if ((projConfig as any)?.mcpServers) {
-                        projectsConfig[projPath] = (projConfig as any).mcpServers
-                      }
-                    }
-
-                    mcpConfigCache.set(claudeJsonSource, {
-                      config: projectsConfig,
-                      mtime: currentMtime,
-                    })
-
-                    mcpServersForSdk = projectsConfig[lookupPath]
-                  }
-                }
+                const lookupPath = input.projectPath || input.cwd
+                const mergedConfig = await getMergedMcpConfig(lookupPath)
+                mcpServersForSdk = mergedConfig.mcpServers
               } catch (configErr) {
-                console.error(`[claude] Failed to read MCP config:`, configErr)
+                console.error(`[claude] Failed to get merged MCP config:`, configErr)
               }
             } catch (mkdirErr) {
               console.error(`[claude] Failed to setup isolated config dir:`, mkdirErr)
@@ -1147,27 +1171,15 @@ ${prompt}
                       questions: (toolInput as any).questions,
                     } as UIMessageChunk)
 
-                    // Wait for response (60s timeout)
+                    // Wait for response (no timeout - question remains open until user responds)
                     const response = await new Promise<{
                       approved: boolean
                       message?: string
                       updatedInput?: unknown
                     }>((resolve) => {
-                      const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        // Emit chunk to notify UI that the question has timed out
-                        // This ensures the pending question dialog is cleared
-                        safeEmit({
-                          type: "ask-user-question-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Timed out" })
-                      }, 60000)
-
                       pendingToolApprovals.set(toolUseID, {
                         subChatId: input.subChatId,
                         resolve: (d) => {
-                          clearTimeout(timeoutId)
                           resolve(d)
                         },
                       })
@@ -1799,30 +1811,21 @@ ${prompt}
   /**
    * Get MCP servers configuration for a project
    * This allows showing MCP servers in UI before starting a chat session
+   * Uses consolidated config from all sources (project, custom, user, custom)
    */
   getMcpConfig: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .query(async ({ input }) => {
-      const claudeJsonPath = path.join(os.homedir(), ".claude.json")
-
       try {
-        const exists = await fs.stat(claudeJsonPath).then(() => true).catch(() => false)
-        if (!exists) {
-          return { mcpServers: [], projectPath: input.projectPath }
-        }
+        // Get merged config from all sources
+        const mergedConfig = await getMergedMcpConfig(input.projectPath)
 
-        const configContent = await fs.readFile(claudeJsonPath, "utf-8")
-        const config = JSON.parse(configContent)
-
-        // Look for project-specific MCP config
-        const projectConfig = config.projects?.[input.projectPath]
-
-        if (!projectConfig?.mcpServers) {
+        if (!mergedConfig.mcpServers || Object.keys(mergedConfig.mcpServers).length === 0) {
           return { mcpServers: [], projectPath: input.projectPath }
         }
 
         // Convert to array format with names
-        const mcpServers = Object.entries(projectConfig.mcpServers).map(([name, serverConfig]) => ({
+        const mcpServers = Object.entries(mergedConfig.mcpServers).map(([name, serverConfig]) => ({
           name,
           // Status will be "pending" until SDK actually connects
           status: "pending" as const,
@@ -1832,7 +1835,7 @@ ${prompt}
 
         return { mcpServers, projectPath: input.projectPath }
       } catch (error) {
-        console.error("[getMcpConfig] Error reading config:", error)
+        console.error("[getMcpConfig] Error reading consolidated config:", error)
         return { mcpServers: [], projectPath: input.projectPath, error: String(error) }
       }
     }),

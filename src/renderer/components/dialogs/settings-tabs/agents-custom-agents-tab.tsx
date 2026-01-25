@@ -29,7 +29,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project" | "devyard"
+  source: "user" | "project" | "custom"
   path: string
 }
 
@@ -43,7 +43,7 @@ export function AgentsCustomAgentsTab() {
 
   const userAgents = agents.filter((a) => a.source === "user")
   const projectAgents = agents.filter((a) => a.source === "project")
-  const devyardAgents = agents.filter((a) => a.source === "devyard")
+  const customAgents = agents.filter((a) => a.source === "custom")
 
   const handleExpandAgent = (agentName: string) => {
     setExpandedAgentName(expandedAgentName === agentName ? null : agentName)
@@ -115,20 +115,15 @@ export function AgentsCustomAgentsTab() {
               </div>
             )}
 
-            {/* Devyard Agents */}
-            {devyardAgents.length > 0 && (
+            {/* Project Agents */}
+            {projectAgents.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">
-                    devyard/claude/plugin/agents/
-                  </div>
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                    Devyard
-                  </span>
+                <div className="text-xs text-muted-foreground">
+                  .claude/agents/
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {devyardAgents.map((agent) => (
+                    {projectAgents.map((agent) => (
                       <AgentRow
                         key={agent.name}
                         agent={agent}
@@ -142,15 +137,15 @@ export function AgentsCustomAgentsTab() {
               </div>
             )}
 
-            {/* Project Agents */}
-            {projectAgents.length > 0 && (
+            {/* Custom Agents (from plugin directories) */}
+            {customAgents.length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs text-muted-foreground">
-                  .claude/agents/
+                  Custom Plugin Directories
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {projectAgents.map((agent) => (
+                    {customAgents.map((agent) => (
                       <AgentRow
                         key={agent.name}
                         agent={agent}

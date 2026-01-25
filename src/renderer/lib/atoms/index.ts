@@ -24,8 +24,12 @@ export {
   // Sidebar atoms
   agentsSidebarOpenAtom,
   agentsSidebarWidthAtom,
+  // DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
   agentsSubChatsSidebarModeAtom,
+  // DEPRECATED: No longer used after layout refactoring. Can be removed in future cleanup.
   agentsSubChatsSidebarWidthAtom,
+  selectedSidebarTabAtom,
+  type SidebarTab,
 
   // Preview atoms
   previewPathAtomFamily,
@@ -171,10 +175,8 @@ export type SettingsTab =
   | "keyboard"
   | "preferences"
   | "models"
+  | "kubernetes"
   | "advanced"
-  | "skills"
-  | "agents"
-  | "mcp"
   | "worktrees"
   | "beta"
   | "debug"

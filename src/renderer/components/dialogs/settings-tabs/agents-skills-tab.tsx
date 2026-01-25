@@ -31,7 +31,7 @@ export function AgentsSkillsTab() {
 
   const userSkills = skills.filter((s) => s.source === "user")
   const projectSkills = skills.filter((s) => s.source === "project")
-  const devyardSkills = skills.filter((s) => s.source === "devyard")
+  const customSkills = skills.filter((s) => s.source === "custom")
 
   const handleExpandSkill = (skillName: string) => {
     setExpandedSkillName(expandedSkillName === skillName ? null : skillName)
@@ -103,20 +103,15 @@ export function AgentsSkillsTab() {
               </div>
             )}
 
-            {/* Devyard Skills */}
-            {devyardSkills.length > 0 && (
+            {/* Project Skills */}
+            {projectSkills.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">
-                    devyard/claude/plugin/skills/
-                  </div>
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                    Devyard
-                  </span>
+                <div className="text-xs text-muted-foreground">
+                  .claude/skills/
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {devyardSkills.map((skill) => (
+                    {projectSkills.map((skill) => (
                       <SkillRow
                         key={skill.name}
                         skill={skill}
@@ -130,15 +125,15 @@ export function AgentsSkillsTab() {
               </div>
             )}
 
-            {/* Project Skills */}
-            {projectSkills.length > 0 && (
+            {/* Custom Skills (from plugin directories) */}
+            {customSkills.length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs text-muted-foreground">
-                  .claude/skills/
+                  Custom Plugin Directories
                 </div>
                 <div className="bg-background rounded-lg border border-border overflow-hidden">
                   <div className="divide-y divide-border">
-                    {projectSkills.map((skill) => (
+                    {customSkills.map((skill) => (
                       <SkillRow
                         key={skill.name}
                         skill={skill}
@@ -184,7 +179,7 @@ function SkillRow({
   onToggle,
   onOpenInFinder,
 }: {
-  skill: { name: string; description: string; source: "user" | "project" | "devyard"; path: string }
+  skill: { name: string; description: string; source: "user" | "project" | "custom"; path: string }
   isExpanded: boolean
   onToggle: () => void
   onOpenInFinder: () => void

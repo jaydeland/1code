@@ -36,10 +36,12 @@ export function AgentsClaudeCodeTab() {
   const [authCode, setAuthCode] = useState("")
   const [copied, setCopied] = useState(false)
   // Auth mode state
-  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey" | "devyard">("oauth")
+  const [authMode, setAuthMode] = useState<"oauth" | "aws" | "apiKey">("oauth")
   const [apiKey, setApiKey] = useState("")
   const [bedrockRegion, setBedrockRegion] = useState("us-east-1")
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
+  const [vpnCheckEnabled, setVpnCheckEnabled] = useState(false)
+  const [vpnCheckUrl, setVpnCheckUrl] = useState("")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -58,10 +60,6 @@ export function AgentsClaudeCodeTab() {
     isLoading: settingsLoading,
     refetch: refetchSettings,
   } = trpc.claudeSettings.getSettings.useQuery()
-
-  // Query MCP servers
-  // Query Devyard availability
-  const { data: devyardStatus } = trpc.claudeSettings.checkDevyard.useQuery()
 
   // Update settings mutation
   const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
@@ -155,6 +153,8 @@ export function AgentsClaudeCodeTab() {
       setAuthMode(claudeSettings.authMode || "oauth")
       setBedrockRegion(claudeSettings.bedrockRegion || "us-east-1")
       setAnthropicBaseUrl(claudeSettings.anthropicBaseUrl || "")
+      setVpnCheckEnabled(claudeSettings.vpnCheckEnabled || false)
+      setVpnCheckUrl(claudeSettings.vpnCheckUrl || "")
       // Don't set API key from masked value - user needs to enter it
     }
   }, [claudeSettings])
@@ -348,10 +348,16 @@ export function AgentsClaudeCodeTab() {
               <AwsSsoSection
                 bedrockRegion={bedrockRegion}
                 onBedrockRegionChange={setBedrockRegion}
+                vpnCheckEnabled={vpnCheckEnabled}
+                onVpnCheckEnabledChange={setVpnCheckEnabled}
+                vpnCheckUrl={vpnCheckUrl}
+                onVpnCheckUrlChange={setVpnCheckUrl}
                 onSave={() => {
                   updateSettings.mutate({
                     authMode,
                     bedrockRegion,
+                    vpnCheckEnabled,
+                    vpnCheckUrl,
                   })
                 }}
                 isSaving={updateSettings.isPending}
@@ -384,48 +390,6 @@ export function AgentsClaudeCodeTab() {
                       Enter an API key above to continue
                     </p>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Devyard Mode Status */}
-            {authMode === "devyard" && flowState.step === "idle" && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                    <Check className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Devyard Mode
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Using Devyard AWS/Kubernetes configuration
-                    </p>
-                  </div>
-                </div>
-                <div className="p-3 bg-muted rounded-lg space-y-1 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">VIDYARD_PATH:</span>
-                    <span className="truncate ml-2">{devyardStatus?.path || "Not set"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Status:</span>
-                    <span>{devyardStatus?.available ? "✓ Available" : "✗ Not available"}</span>
-                  </div>
-                  <div className="flex justify-between pt-1 border-t border-border/50">
-                    <span className="text-muted-foreground">Config Dir:</span>
-                    <span className="truncate ml-2">{devyardStatus?.claudeConfigDir || "~/devyard/claude"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Plugin Dir:</span>
-                    <span className="truncate ml-2">{devyardStatus?.claudePluginDir || "~/devyard/claude/plugin"}</span>
-                  </div>
-                </div>
-                {!devyardStatus?.available && (
-                  <p className="text-xs text-destructive">
-                    Devyard not detected. Set VIDYARD_PATH environment variable.
-                  </p>
                 )}
               </div>
             )}

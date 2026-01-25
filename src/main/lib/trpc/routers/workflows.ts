@@ -4,9 +4,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
-import { getDatabase, claudeCodeSettings } from "../../db"
+import { getDatabase, claudeCodeSettings, configSources } from "../../db"
 import { eq } from "drizzle-orm"
-import { getWorkflowConfigDir } from "./devyard-scan-helper"
 
 // ============ TYPES ============
 
@@ -16,6 +15,18 @@ interface ValidationError {
   severity: "error" | "warning"
 }
 
+// Hook configuration for lifecycle events
+interface HookConfig {
+  PreToolUse?: Array<{ matcher: string; command: string }>
+  PostToolUse?: Array<{ matcher: string; command: string }>
+  SubagentStart?: Array<{ matcher: string; command: string }>
+  SubagentStop?: Array<{ matcher: string; command: string }>
+  Stop?: Array<{ matcher: string; command: string }>
+}
+
+// Permission modes for subagents (Claude Code official modes)
+type PermissionMode = 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'plan'
+
 interface AgentMetadata {
   id: string
   name: string
@@ -23,7 +34,14 @@ interface AgentMetadata {
   tools: string[]
   model: string
   sourcePath: string
+  source: "user" | "project" | "custom"
   validationErrors?: ValidationError[]
+
+  // New official Claude Code fields
+  disallowedTools?: string[]           // Tool denylist
+  permissionMode?: PermissionMode      // Execution permission mode
+  skills?: string[]                    // Preloaded skills
+  hooks?: HookConfig                   // Lifecycle hooks
 }
 
 interface CommandMetadata {
@@ -32,6 +50,7 @@ interface CommandMetadata {
   description: string
   allowedTools: string[]
   sourcePath: string
+  source: "user" | "project" | "custom"
   validationErrors?: ValidationError[]
 }
 
@@ -40,7 +59,19 @@ interface SkillMetadata {
   name: string
   description: string
   sourcePath: string
+  source: "user" | "project" | "custom"
   validationErrors?: ValidationError[]
+
+  // New comprehensive skill fields
+  argumentHint?: string                 // Usage hint for arguments
+  disableModelInvocation?: boolean      // Prevents automatic invocation
+  userInvocable?: boolean               // Can be invoked by user
+  allowedTools?: string[]               // Tool allowlist for skill
+  model?: string                        // Model override
+  context?: 'fork'                      // Execution context (fork = separate context)
+  agent?: string                        // Which subagent type to use
+  hooks?: HookConfig                    // Lifecycle hooks
+  supportingFiles?: string[]            // Detected supporting files (template.md, examples/, scripts/)
 }
 
 interface CliAppMetadata {
@@ -110,11 +141,34 @@ const BUILTIN_TOOLS = [
 
 /**
  * Get the Claude config directory, preferring customConfigDir from settings
- * When Devyard mode is active, automatically uses devyard/claude/plugin/ directory
  */
 async function getClaudeConfigDir(): Promise<string> {
-  const { baseDir } = getWorkflowConfigDir()
-  return baseDir
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(claudeCodeSettings)
+    .where(eq(claudeCodeSettings.id, "default"))
+    .get()
+
+  // Use custom config dir if set, otherwise default to ~/.claude
+  return settings?.customConfigDir || path.join(os.homedir(), ".claude")
+}
+
+/**
+ * Get custom plugin directories from database
+ * These directories contain agents/, skills/, commands/ subdirectories
+ */
+function getCustomPluginDirectories(): Array<{ path: string; priority: number }> {
+  const db = getDatabase()
+  const sources = db
+    .select()
+    .from(configSources)
+    .where(eq(configSources.type, "plugin"))
+    .orderBy(configSources.priority)
+    .all()
+    .filter((s) => s.enabled)
+
+  return sources.map((s) => ({ path: s.path, priority: s.priority }))
 }
 
 /**
@@ -163,6 +217,27 @@ function validateFrontmatter(data: any): ValidationError[] {
 }
 
 /**
+ * Parse hooks configuration from frontmatter data
+ */
+function parseHooks(data: any): HookConfig | undefined {
+  if (!data.hooks || typeof data.hooks !== 'object') return undefined
+
+  const hooks: HookConfig = {}
+  const hookTypes = ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'Stop'] as const
+
+  for (const hookType of hookTypes) {
+    const hookData = data.hooks[hookType]
+    if (Array.isArray(hookData)) {
+      hooks[hookType] = hookData.filter(
+        (h: any) => h && typeof h.matcher === 'string' && typeof h.command === 'string'
+      )
+    }
+  }
+
+  return Object.keys(hooks).length > 0 ? hooks : undefined
+}
+
+/**
  * Parse agent .md file frontmatter
  */
 function parseAgentMd(content: string, filename: string): AgentMetadata {
@@ -184,6 +259,22 @@ function parseAgentMd(content: string, filename: string): AgentMetadata {
     const errors = validateFrontmatter(data)
     validationErrors.push(...errors)
 
+    // Parse permission mode (with validation)
+    let permissionMode: PermissionMode | undefined
+    if (data.permissionMode || data['permission-mode']) {
+      const rawMode = data.permissionMode || data['permission-mode']
+      const validModes: PermissionMode[] = ['default', 'acceptEdits', 'dontAsk', 'bypassPermissions', 'plan']
+      if (validModes.includes(rawMode)) {
+        permissionMode = rawMode as PermissionMode
+      } else {
+        validationErrors.push({
+          field: "permissionMode",
+          message: `Invalid permission mode '${rawMode}'. Valid modes: ${validModes.join(', ')}`,
+          severity: "warning",
+        })
+      }
+    }
+
     return {
       id: filename.replace(/\.md$/, ""),
       name: typeof data.name === "string" ? data.name : filename.replace(/\.md$/, ""),
@@ -191,7 +282,16 @@ function parseAgentMd(content: string, filename: string): AgentMetadata {
       tools: Array.isArray(data.tools) ? (data.tools as string[]) : [],
       model: typeof data.model === "string" ? data.model : "",
       sourcePath: "", // Will be set by caller
+      source: "user", // Placeholder, will be set by caller
       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+
+      // New official Claude Code fields
+      disallowedTools: Array.isArray(data.disallowedTools || data['disallowed-tools'])
+        ? (data.disallowedTools || data['disallowed-tools']) as string[]
+        : undefined,
+      permissionMode,
+      skills: Array.isArray(data.skills) ? (data.skills as string[]) : undefined,
+      hooks: parseHooks(data),
     }
   } catch (err) {
     console.error(`[workflows] Failed to parse agent frontmatter for ${filename}:`, err)
@@ -210,6 +310,7 @@ function parseAgentMd(content: string, filename: string): AgentMetadata {
       tools: [],
       model: "",
       sourcePath: "",
+      source: "user", // Placeholder, will be set by caller
       validationErrors,
     }
   }
@@ -248,6 +349,7 @@ function parseCommandMd(content: string, filename: string): CommandMetadata {
       description: typeof data.description === "string" ? data.description : "",
       allowedTools,
       sourcePath: "", // Will be set by caller
+      source: "user", // Placeholder, will be set by caller
       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
     }
   } catch (err) {
@@ -265,15 +367,16 @@ function parseCommandMd(content: string, filename: string): CommandMetadata {
       description: "",
       allowedTools: [],
       sourcePath: "",
+      source: "user", // Placeholder, will be set by caller
       validationErrors,
     }
   }
 }
 
 /**
- * Parse SKILL.md frontmatter
+ * Parse SKILL.md frontmatter with comprehensive field extraction
  */
-function parseSkillMd(content: string, dirName: string): SkillMetadata {
+function parseSkillMd(content: string, dirName: string, supportingFiles?: string[]): SkillMetadata {
   const validationErrors: ValidationError[] = []
 
   try {
@@ -288,12 +391,44 @@ function parseSkillMd(content: string, dirName: string): SkillMetadata {
 
     const { data } = matter(content)
 
+    // Parse context field (validates it's 'fork' if present)
+    let context: 'fork' | undefined
+    if (data.context === 'fork') {
+      context = 'fork'
+    } else if (data.context) {
+      validationErrors.push({
+        field: "context",
+        message: `Invalid context '${data.context}'. Only 'fork' is supported.`,
+        severity: "warning",
+      })
+    }
+
     return {
       id: dirName,
       name: typeof data.name === "string" ? data.name : dirName,
       description: typeof data.description === "string" ? data.description : "",
       sourcePath: "", // Will be set by caller
+      source: "user", // Placeholder, will be set by caller
       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+
+      // New comprehensive skill fields
+      argumentHint: typeof data.argumentHint === "string" || typeof data['argument-hint'] === "string"
+        ? (data.argumentHint || data['argument-hint'])
+        : undefined,
+      disableModelInvocation: typeof data.disableModelInvocation === "boolean" || typeof data['disable-model-invocation'] === "boolean"
+        ? (data.disableModelInvocation ?? data['disable-model-invocation'])
+        : undefined,
+      userInvocable: typeof data.userInvocable === "boolean" || typeof data['user-invocable'] === "boolean"
+        ? (data.userInvocable ?? data['user-invocable'])
+        : undefined,
+      allowedTools: Array.isArray(data.allowedTools || data['allowed-tools'])
+        ? (data.allowedTools || data['allowed-tools']) as string[]
+        : undefined,
+      model: typeof data.model === "string" ? data.model : undefined,
+      context,
+      agent: typeof data.agent === "string" ? data.agent : undefined,
+      hooks: parseHooks(data),
+      supportingFiles: supportingFiles && supportingFiles.length > 0 ? supportingFiles : undefined,
     }
   } catch (err) {
     console.error(`[workflows] Failed to parse skill frontmatter for ${dirName}:`, err)
@@ -309,6 +444,7 @@ function parseSkillMd(content: string, dirName: string): SkillMetadata {
       name: dirName,
       description: "",
       sourcePath: "",
+      source: "user", // Placeholder, will be set by caller
       validationErrors,
     }
   }
@@ -317,7 +453,7 @@ function parseSkillMd(content: string, dirName: string): SkillMetadata {
 /**
  * Scan agents directory for .md files
  */
-async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
+async function scanAgentsDir(baseDir: string, source: "user" | "project" | "custom"): Promise<AgentMetadata[]> {
   const agentsDir = path.join(baseDir, "agents")
   const agents: AgentMetadata[] = []
 
@@ -344,6 +480,7 @@ async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
       const content = await fs.readFile(filePath, "utf-8")
       const parsed = parseAgentMd(content, entry.name)
       parsed.sourcePath = filePath
+      parsed.source = source
       agents.push(parsed)
     } catch (err) {
       console.error(`[workflows] Failed to parse agent ${entry.name}:`, err instanceof Error ? err.message : err)
@@ -357,7 +494,7 @@ async function scanAgentsDir(baseDir: string): Promise<AgentMetadata[]> {
 /**
  * Scan commands directory for .md files
  */
-async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
+async function scanCommandsDir(baseDir: string, source: "user" | "project" | "custom"): Promise<CommandMetadata[]> {
   const commandsDir = path.join(baseDir, "commands")
   const commands: CommandMetadata[] = []
 
@@ -384,6 +521,7 @@ async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
       const content = await fs.readFile(filePath, "utf-8")
       const parsed = parseCommandMd(content, entry.name)
       parsed.sourcePath = filePath
+      parsed.source = source
       commands.push(parsed)
     } catch (err) {
       console.error(`[workflows] Failed to parse command ${entry.name}:`, err instanceof Error ? err.message : err)
@@ -395,9 +533,45 @@ async function scanCommandsDir(baseDir: string): Promise<CommandMetadata[]> {
 }
 
 /**
+ * Detect supporting files in a skill directory
+ * Returns array of supporting file names/directories
+ */
+async function detectSupportingFiles(skillDir: string): Promise<string[]> {
+  const supportingFiles: string[] = []
+  const knownSupportingPatterns = [
+    'template.md',
+    'examples',
+    'scripts',
+    'assets',
+    'templates',
+    'config.json',
+    'schema.json',
+  ]
+
+  try {
+    const entries = await fs.readdir(skillDir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      // Skip SKILL.md itself
+      if (entry.name === 'SKILL.md') continue
+
+      // Check if it matches a known supporting pattern
+      const nameLower = entry.name.toLowerCase()
+      if (knownSupportingPatterns.some(pattern => nameLower === pattern || nameLower.startsWith(pattern.split('.')[0]))) {
+        supportingFiles.push(entry.name + (entry.isDirectory() ? '/' : ''))
+      }
+    }
+  } catch {
+    // Directory access failed, return empty
+  }
+
+  return supportingFiles
+}
+
+/**
  * Scan skills directory for SKILL.md files
  */
-async function scanSkillsDir(baseDir: string): Promise<SkillMetadata[]> {
+async function scanSkillsDir(baseDir: string, source: "user" | "project" | "custom"): Promise<SkillMetadata[]> {
   const skillsDir = path.join(baseDir, "skills")
   const skills: SkillMetadata[] = []
 
@@ -419,13 +593,19 @@ async function scanSkillsDir(baseDir: string): Promise<SkillMetadata[]> {
       continue
     }
 
-    const skillMdPath = path.join(skillsDir, entry.name, "SKILL.md")
+    const skillDir = path.join(skillsDir, entry.name)
+    const skillMdPath = path.join(skillDir, "SKILL.md")
 
     try {
       await fs.access(skillMdPath)
       const content = await fs.readFile(skillMdPath, "utf-8")
-      const parsed = parseSkillMd(content, entry.name)
+
+      // Detect supporting files in the skill directory
+      const supportingFiles = await detectSupportingFiles(skillDir)
+
+      const parsed = parseSkillMd(content, entry.name, supportingFiles)
       parsed.sourcePath = skillMdPath
+      parsed.source = source
       skills.push(parsed)
     } catch {
       // SKILL.md doesn't exist, skip
@@ -1049,7 +1229,7 @@ export const workflowsRouter = router({
    */
   listAgents: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
-    return await scanAgentsDir(baseDir)
+    return await scanAgentsDir(baseDir, "user")
   }),
 
   /**
@@ -1058,7 +1238,7 @@ export const workflowsRouter = router({
    */
   listCommands: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
-    return await scanCommandsDir(baseDir)
+    return await scanCommandsDir(baseDir, "user")
   }),
 
   /**
@@ -1067,7 +1247,7 @@ export const workflowsRouter = router({
    */
   listSkills: publicProcedure.query(async () => {
     const baseDir = await getClaudeConfigDir()
-    return await scanSkillsDir(baseDir)
+    return await scanSkillsDir(baseDir, "user")
   }),
 
   /**
@@ -1093,13 +1273,91 @@ export const workflowsRouter = router({
    * Get the complete workflow dependency graph
    * Returns agents, commands, skills with agent and command dependencies categorized
    */
-  getWorkflowGraph: publicProcedure.query<WorkflowGraph>(async () => {
-    const baseDir = await getClaudeConfigDir()
+  getWorkflowGraph: publicProcedure
+    .input(
+      z
+        .object({
+          projectPath: z.string().optional(),
+        })
+        .optional()
+    )
+    .query<WorkflowGraph>(async ({ input }) => {
+    const userConfigDir = await getClaudeConfigDir()
 
-    // Scan all workflow items
-    const agents = await scanAgentsDir(baseDir)
-    const commands = await scanCommandsDir(baseDir)
-    const skills = await scanSkillsDir(baseDir)
+    // Get custom plugin directories
+    const customDirs = getCustomPluginDirectories()
+
+    // Scan all sources in parallel
+    const scanPromises: {
+      agents: Promise<AgentMetadata[]>[]
+      commands: Promise<CommandMetadata[]>[]
+      skills: Promise<SkillMetadata[]>[]
+    } = {
+      agents: [],
+      commands: [],
+      skills: [],
+    }
+
+    // Project source (if projectPath provided)
+    if (input?.projectPath) {
+      const projectConfigDir = path.join(input.projectPath, ".claude")
+      scanPromises.agents.push(scanAgentsDir(projectConfigDir, "project"))
+      scanPromises.commands.push(scanCommandsDir(projectConfigDir, "project"))
+      scanPromises.skills.push(scanSkillsDir(projectConfigDir, "project"))
+    }
+
+    // User source
+    scanPromises.agents.push(scanAgentsDir(userConfigDir, "user"))
+    scanPromises.commands.push(scanCommandsDir(userConfigDir, "user"))
+    scanPromises.skills.push(scanSkillsDir(userConfigDir, "user"))
+
+    // Custom sources (plugins)
+    for (const customDir of customDirs) {
+      scanPromises.agents.push(scanAgentsDir(customDir.path, "custom"))
+      scanPromises.commands.push(scanCommandsDir(customDir.path, "custom"))
+      scanPromises.skills.push(scanSkillsDir(customDir.path, "custom"))
+    }
+
+    // Wait for all scans
+    const [agentResults, commandResults, skillResults] = await Promise.all([
+      Promise.all(scanPromises.agents),
+      Promise.all(scanPromises.commands),
+      Promise.all(scanPromises.skills),
+    ])
+
+    // Flatten and deduplicate by ID (first source wins)
+    const seenAgentIds = new Set<string>()
+    const agents: AgentMetadata[] = []
+    for (const agentList of agentResults) {
+      for (const agent of agentList) {
+        if (!seenAgentIds.has(agent.id)) {
+          seenAgentIds.add(agent.id)
+          agents.push(agent)
+        }
+      }
+    }
+
+    const seenCommandIds = new Set<string>()
+    const commands: CommandMetadata[] = []
+    for (const commandList of commandResults) {
+      for (const command of commandList) {
+        if (!seenCommandIds.has(command.id)) {
+          seenCommandIds.add(command.id)
+          commands.push(command)
+        }
+      }
+    }
+
+    const seenSkillIds = new Set<string>()
+    const skills: SkillMetadata[] = []
+    for (const skillList of skillResults) {
+      for (const skill of skillList) {
+        if (!seenSkillIds.has(skill.id)) {
+          seenSkillIds.add(skill.id)
+          skills.push(skill)
+        }
+      }
+    }
 
     // Build ID sets for cross-referencing
     const allAgentIds = agents.map((a) => a.id)
@@ -1149,35 +1407,101 @@ export const workflowsRouter = router({
 
   /**
    * Read the content of a workflow file
-   * Validates the path is within the Claude config directory to prevent path traversal
+   * Validates the path is a .md file within safe directories to prevent path traversal
+   * Allows reading from:
+   * - User Claude config: ~/.claude/
+   * - Project .claude directories
+   * - Custom plugin directories
    */
   readFileContent: publicProcedure
     .input(z.object({ path: z.string() }))
     .query(async ({ input }) => {
-      // Get the base Claude config directory
-      const baseDir = await getClaudeConfigDir()
+      console.log('[workflows.readFileContent] Requested path:', input.path)
 
-      // Security: resolve both paths and ensure target is within base
-      const resolvedBase = path.resolve(baseDir)
       const resolvedTarget = path.resolve(input.path)
+      console.log('[workflows.readFileContent] Resolved path:', resolvedTarget)
 
-      // Path traversal check
-      if (!resolvedTarget.startsWith(resolvedBase)) {
-        throw new Error("Access denied: path is outside Claude config directory")
+      // Security: Only allow reading .md files
+      if (!resolvedTarget.endsWith('.md')) {
+        console.error('[workflows.readFileContent] Security error: not .md file')
+        throw new Error("Access denied: only .md files can be read")
+      }
+
+      // Security: Ensure path contains a claude directory somewhere
+      // This allows ~/.claude/, <project>/.claude/, and devyard/claude/
+      if (!resolvedTarget.includes('/.claude/') && !resolvedTarget.includes('/claude/')) {
+        console.error('[workflows.readFileContent] Security error: not in claude directory')
+        throw new Error("Access denied: path must be within a claude directory")
       }
 
       // Check if path is a file (not a directory)
       try {
         const stats = await fs.stat(resolvedTarget)
         if (!stats.isFile()) {
+          console.error('[workflows.readFileContent] Error: path is not a file')
           throw new Error("Path is not a file")
         }
       } catch (err) {
+        console.error('[workflows.readFileContent] Error stating file:', err)
         throw new Error(`File not found: ${input.path}`)
       }
 
       // Read and return file content
-      return await fs.readFile(resolvedTarget, "utf-8")
+      console.log('[workflows.readFileContent] Reading file...')
+      const content = await fs.readFile(resolvedTarget, "utf-8")
+      console.log('[workflows.readFileContent] Success, content length:', content.length)
+      return content
+    }),
+
+  /**
+   * Write content to a workflow file
+   * Validates the path is a .md file within safe directories to prevent path traversal
+   * Allows writing to:
+   * - User Claude config: ~/.claude/
+   * - Project .claude directories
+   * - Custom plugin directories
+   */
+  writeFileContent: publicProcedure
+    .input(z.object({
+      path: z.string(),
+      content: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log('[workflows.writeFileContent] Requested path:', input.path)
+
+      const resolvedTarget = path.resolve(input.path)
+      console.log('[workflows.writeFileContent] Resolved path:', resolvedTarget)
+
+      // Security: Only allow writing .md files
+      if (!resolvedTarget.endsWith('.md')) {
+        console.error('[workflows.writeFileContent] Security error: not .md file')
+        throw new Error("Access denied: only .md files can be written")
+      }
+
+      // Security: Ensure path contains a claude directory somewhere
+      // This allows ~/.claude/, <project>/.claude/, and devyard/claude/
+      if (!resolvedTarget.includes('/.claude/') && !resolvedTarget.includes('/claude/')) {
+        console.error('[workflows.writeFileContent] Security error: not in claude directory')
+        throw new Error("Access denied: path must be within a claude directory")
+      }
+
+      // Check if path is a file (not a directory) and exists
+      try {
+        const stats = await fs.stat(resolvedTarget)
+        if (!stats.isFile()) {
+          console.error('[workflows.writeFileContent] Error: path is not a file')
+          throw new Error("Path is not a file")
+        }
+      } catch (err) {
+        console.error('[workflows.writeFileContent] Error stating file:', err)
+        throw new Error(`File not found: ${input.path}`)
+      }
+
+      // Write file content
+      console.log('[workflows.writeFileContent] Writing file...')
+      await fs.writeFile(resolvedTarget, input.content, "utf-8")
+      console.log('[workflows.writeFileContent] Success, content length:', input.content.length)
+      return { success: true }
     }),
 })
 
@@ -1191,4 +1515,6 @@ export type {
   AgentWithDependencies,
   CommandWithDependencies,
   WorkflowGraph,
+  HookConfig,
+  PermissionMode,
 }

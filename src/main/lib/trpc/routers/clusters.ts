@@ -35,7 +35,7 @@ const execAsync = promisify(exec)
 const eksServiceCache = new Map<string, EksService>()
 
 /**
- * Get stored AWS credentials from database
+ * Get stored AWS credentials from database (decrypted)
  */
 function getStoredCredentials(): AwsCredentials | null {
   const db = getDatabase()
@@ -45,11 +45,13 @@ function getStoredCredentials(): AwsCredentials | null {
     .where(eq(claudeCodeSettings.id, "default"))
     .get()
 
-  if (
-    !settings?.awsAccessKeyId ||
-    !settings?.awsSecretAccessKey ||
-    !settings?.awsSessionToken
-  ) {
+  // Need all three credential fields for EKS access
+  if (!settings?.awsAccessKeyId || !settings?.awsSecretAccessKey || !settings?.awsSessionToken) {
+    console.log("[clusters] AWS credentials not complete in database:", {
+      hasAccessKey: !!settings?.awsAccessKeyId,
+      hasSecretKey: !!settings?.awsSecretAccessKey,
+      hasSessionToken: !!settings?.awsSessionToken,
+    })
     return null
   }
 
@@ -108,14 +110,32 @@ async function getGitUserEmail(): Promise<string | null> {
 export const clustersRouter = router({
   /**
    * Check if clusters feature is available (AWS credentials present)
+   * Note: AWS credentials can be configured independently of authMode
+   * Users can have AWS SSO for Kubernetes even if using OAuth for Claude
    */
   isAvailable: publicProcedure.query(() => {
-    const credentials = getStoredCredentials()
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    // Check if credentials exist in database (even if expired)
+    const hasCredentials = !!(
+      settings?.awsAccessKeyId &&
+      settings?.awsSecretAccessKey &&
+      settings?.awsSessionToken
+    )
+
+    // Check expiration if credentials exist
+    const isExpired = hasCredentials && settings?.awsCredentialsExpiresAt
+      ? settings.awsCredentialsExpiresAt < new Date()
+      : false
+
     return {
-      available: credentials !== null,
-      credentialsExpired: credentials
-        ? credentials.expiration < new Date()
-        : false,
+      available: hasCredentials,
+      credentialsExpired: isExpired,
     }
   }),
 

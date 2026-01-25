@@ -4,13 +4,32 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import { eq } from "drizzle-orm"
+import { getDatabase, configSources } from "../../db"
 
 interface FileCommand {
   name: string
   description: string
   argumentHint?: string
-  source: "user" | "project"
+  source: "user" | "project" | "custom"
   path: string
+}
+
+/**
+ * Get custom plugin directories from database
+ * These directories contain agents/, skills/, commands/ subdirectories
+ */
+function getCustomPluginDirectories(): Array<{ path: string; priority: number }> {
+  const db = getDatabase()
+  const sources = db
+    .select()
+    .from(configSources)
+    .where(eq(configSources.type, "plugin"))
+    .orderBy(configSources.priority)
+    .all()
+    .filter((s) => s.enabled)
+
+  return sources.map((s) => ({ path: s.path, priority: s.priority }))
 }
 
 /**
@@ -49,7 +68,7 @@ function isValidEntryName(name: string): boolean {
  */
 async function scanCommandsDirectory(
   dir: string,
-  source: "user" | "project",
+  source: "user" | "project" | "custom",
   prefix = "",
 ): Promise<FileCommand[]> {
   const commands: FileCommand[] = []
@@ -112,6 +131,7 @@ export const commandsRouter = router({
    * List all commands from filesystem
    * - User commands: ~/.claude/commands/
    * - Project commands: .claude/commands/ (relative to projectPath)
+   * - Custom commands: from plugin directories in database
    */
   list: publicProcedure
     .input(
@@ -123,29 +143,48 @@ export const commandsRouter = router({
     )
     .query(async ({ input }) => {
       const userCommandsDir = path.join(os.homedir(), ".claude", "commands")
-      const userCommandsPromise = scanCommandsDirectory(userCommandsDir, "user")
 
-      let projectCommandsPromise = Promise.resolve<FileCommand[]>([])
+      // Get custom plugin directories from database
+      const customDirs = getCustomPluginDirectories()
+
+      // Scan all directories in parallel
+      const scanPromises: Promise<FileCommand[]>[] = []
+
+      // Project commands (highest priority)
       if (input?.projectPath) {
         const projectCommandsDir = path.join(
           input.projectPath,
           ".claude",
           "commands",
         )
-        projectCommandsPromise = scanCommandsDirectory(
-          projectCommandsDir,
-          "project",
-        )
+        scanPromises.push(scanCommandsDirectory(projectCommandsDir, "project"))
       }
 
-      // Scan both directories in parallel
-      const [userCommands, projectCommands] = await Promise.all([
-        userCommandsPromise,
-        projectCommandsPromise,
-      ])
+      // User commands
+      scanPromises.push(scanCommandsDirectory(userCommandsDir, "user"))
 
-      // Project commands first (more specific), then user commands
-      return [...projectCommands, ...userCommands]
+      // Custom plugin directories (scan commands/ subdirectory)
+      for (const customDir of customDirs) {
+        const commandsDir = path.join(customDir.path, "commands")
+        scanPromises.push(scanCommandsDirectory(commandsDir, "custom"))
+      }
+
+      const results = await Promise.all(scanPromises)
+
+      // Flatten results and deduplicate by name (first source wins)
+      const seenNames = new Set<string>()
+      const commands: FileCommand[] = []
+
+      for (const commandList of results) {
+        for (const command of commandList) {
+          if (!seenNames.has(command.name)) {
+            seenNames.add(command.name)
+            commands.push(command)
+          }
+        }
+      }
+
+      return commands
     }),
 
   /**

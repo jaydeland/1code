@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { Cloud, RefreshCw, Clock, AlertTriangle, Server } from "lucide-react"
+import { Cloud, RefreshCw, Clock, AlertTriangle, Server, Shield } from "lucide-react"
 import { trpc } from "../lib/trpc"
 import { cn } from "../lib/utils"
 import { toast } from "sonner"
@@ -76,6 +76,12 @@ export function AwsStatusBar() {
     refetchInterval: 60000, // Update every minute
   })
 
+  // Query VPN status
+  const { data: vpnStatus } = trpc.awsSso.checkVpnStatus.useQuery(undefined, {
+    enabled: !!awsStatus?.authenticated,
+    refetchInterval: 60000, // Check every minute
+  })
+
   // Query derived namespace from email
   const { data: derivedNamespace } = trpc.clusters.getDefaultNamespace.useQuery(undefined, {
     enabled: clustersEnabled,
@@ -132,8 +138,9 @@ export function AwsStatusBar() {
     return () => clearInterval(interval)
   }, [awsStatus, checkAndRefresh])
 
-  // Don't show if not authenticated with AWS
-  if (!awsStatus?.authenticated || !awsStatus?.hasCredentials) {
+  // Don't show if not using AWS auth mode or not configured
+  // Show even if credentials expired so user can refresh
+  if (!awsStatus?.authMode || awsStatus.authMode !== "aws" || !awsStatus?.configured) {
     return null
   }
 
@@ -163,19 +170,26 @@ export function AwsStatusBar() {
           <span className="font-medium">AWS</span>
         </div>
 
-        {/* Account */}
-        <div className="flex items-center gap-1">
-          <span className="text-muted-foreground/70">Account:</span>
-          <span className="font-mono">
-            {awsStatus.accountName || awsStatus.accountId || "Unknown"}
-          </span>
-        </div>
+        {/* Account - show if available, otherwise show "Not authenticated" */}
+        {awsStatus.accountName || awsStatus.accountId ? (
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground/70">Account:</span>
+            <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
+              {awsStatus.accountName || awsStatus.accountId}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground/70">Status:</span>
+            <span className="font-semibold text-red-600 dark:text-red-500">Not authenticated</span>
+          </div>
+        )}
 
         {/* Role */}
         {awsStatus.roleName && (
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground/70">Role:</span>
-            <span className="font-mono">{awsStatus.roleName}</span>
+            <span className="font-mono font-semibold text-purple-600 dark:text-purple-400">{awsStatus.roleName}</span>
           </div>
         )}
 
@@ -184,6 +198,7 @@ export function AwsStatusBar() {
           <div
             className={cn(
               "flex items-center gap-1",
+              !credentialsExpiry.isExpiringSoon && !credentialsExpiry.isExpired && "text-green-600 dark:text-green-400",
               credentialsExpiry.isExpiringSoon && "text-yellow-600 dark:text-yellow-500",
               credentialsExpiry.isExpired && "text-red-600 dark:text-red-500"
             )}
@@ -194,10 +209,32 @@ export function AwsStatusBar() {
               <Clock className="h-3 w-3" />
             )}
             <span className="text-muted-foreground/70">Token:</span>
-            <span>{credentialsExpiry.text}</span>
+            <span className="font-semibold">{credentialsExpiry.text}</span>
           </div>
         )}
       </div>
+
+      {/* VPN Status Indicator */}
+      {vpnStatus?.enabled && (
+        <div
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded mr-2"
+          title={
+            vpnStatus.connected
+              ? "VPN Connected"
+              : "VPN Disconnected - Cannot reach internal network"
+          }
+        >
+          {/* Connection status dot */}
+          <span
+            className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              vpnStatus.connected ? "bg-emerald-500" : "bg-red-500"
+            )}
+          />
+          <Shield className="h-3 w-3" />
+          <span className="text-xs">VPN</span>
+        </div>
+      )}
 
       {/* K8s Cluster Indicator (right side) */}
       {clustersEnabled && selectedClusterId && (

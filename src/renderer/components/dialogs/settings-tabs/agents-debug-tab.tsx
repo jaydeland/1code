@@ -1,10 +1,19 @@
 import { useState, useEffect } from "react"
 import { useAtom } from "jotai"
+import { atomWithStorage } from "jotai/utils"
 import { Button } from "../../ui/button"
 import { Switch } from "../../ui/switch"
 import { trpc } from "../../../lib/trpc"
 import { toast } from "sonner"
-import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff } from "lucide-react"
+import { Copy, FolderOpen, RefreshCw, Terminal, Check, Scan, WifiOff, Bot, Play, RotateCcw } from "lucide-react"
+
+// Atom for showing background session debug info (default on in dev)
+export const showBackgroundSessionAtom = atomWithStorage<boolean>(
+  "debug:show-background-session",
+  true, // Default on in dev (this tab only shows in dev anyway)
+  undefined,
+  { getOnInit: true }
+)
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -61,6 +70,8 @@ export function AgentsDebugTab() {
   const [copiedInfo, setCopiedInfo] = useState(false)
   const [reactScanEnabled, setReactScanEnabled] = useState(false)
   const [reactScanLoading, setReactScanLoading] = useState(false)
+  const [showBackgroundSession, setShowBackgroundSession] = useAtom(showBackgroundSessionAtom)
+  const [testTitleInput, setTestTitleInput] = useState("")
   const isNarrowScreen = useIsNarrowScreen()
 
   // Check if we're in dev mode (only show React Scan in dev)
@@ -69,6 +80,35 @@ export function AgentsDebugTab() {
   // Fetch system info
   const { data: systemInfo, isLoading: isLoadingSystem } =
     trpc.debug.getSystemInfo.useQuery()
+
+  // Background session state
+  const { data: bgSessionState, refetch: refetchBgSession } =
+    trpc.debug.getBackgroundSessionState.useQuery(undefined, {
+      refetchInterval: showBackgroundSession ? 5000 : false, // Poll every 5s when visible
+    })
+
+  const initBgSessionMutation = trpc.debug.initBackgroundSession.useMutation({
+    onSuccess: () => {
+      refetchBgSession()
+      toast.success("Background session initialized")
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  const resetBgSessionMutation = trpc.debug.resetBackgroundSession.useMutation({
+    onSuccess: () => {
+      refetchBgSession()
+      toast.success("Background session reset")
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  const testTitleMutation = trpc.debug.testTitleGeneration.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Generated title: "${data.title}"`)
+    },
+    onError: (error) => toast.error(error.message),
+  })
 
   // Offline simulation state
   const { data: offlineSimulation, refetch: refetchOfflineSimulation } =
@@ -293,6 +333,111 @@ export function AgentsDebugTab() {
                 }
                 disabled={setOfflineSimulationMutation.isPending}
               />
+            </div>
+            <div className="flex items-center justify-between p-3">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <span className="text-sm">Show Background Session</span>
+                  <p className="text-xs text-muted-foreground">
+                    Display background Claude session info
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={showBackgroundSession}
+                onCheckedChange={setShowBackgroundSession}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Background Session Info (when toggle is on) */}
+      {isDev && showBackgroundSession && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Background Session
+          </h4>
+          <div className="rounded-lg border bg-muted/30 divide-y">
+            <InfoRow
+              label="Status"
+              value={bgSessionState?.status ?? "unknown"}
+              status={
+                bgSessionState?.status === "ready"
+                  ? "success"
+                  : bgSessionState?.status === "error"
+                    ? "error"
+                    : bgSessionState?.status === "initializing"
+                      ? "warning"
+                      : undefined
+              }
+            />
+            <InfoRow label="Model" value={bgSessionState?.model ?? "-"} />
+            <InfoRow label="Requests" value={bgSessionState?.requestCount?.toString() ?? "0"} />
+            <InfoRow
+              label="Last Used"
+              value={
+                bgSessionState?.lastUsedTime
+                  ? new Date(bgSessionState.lastUsedTime).toLocaleTimeString()
+                  : "Never"
+              }
+            />
+            {bgSessionState?.sessionId && (
+              <InfoRow
+                label="Session ID"
+                value={bgSessionState.sessionId.slice(0, 12) + "..."}
+              />
+            )}
+            {bgSessionState?.errorMessage && (
+              <div className="p-3">
+                <span className="text-sm text-muted-foreground">Error</span>
+                <p className="text-sm text-red-500 mt-1">{bgSessionState.errorMessage}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Background Session Actions */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => initBgSessionMutation.mutate()}
+              disabled={initBgSessionMutation.isPending || bgSessionState?.status === "ready"}
+            >
+              <Play className="h-4 w-4 mr-2" />
+              {initBgSessionMutation.isPending ? "..." : "Init Session"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => resetBgSessionMutation.mutate()}
+              disabled={resetBgSessionMutation.isPending}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              {resetBgSessionMutation.isPending ? "..." : "Reset Session"}
+            </Button>
+          </div>
+
+          {/* Test Title Generation */}
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Test Title Generation</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={testTitleInput}
+                onChange={(e) => setTestTitleInput(e.target.value)}
+                placeholder="Enter a message to generate title..."
+                className="flex-1 px-3 py-2 text-sm rounded-md border bg-background"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => testTitleMutation.mutate({ message: testTitleInput })}
+                disabled={testTitleMutation.isPending || !testTitleInput.trim()}
+              >
+                {testTitleMutation.isPending ? "..." : "Generate"}
+              </Button>
             </div>
           </div>
         </div>

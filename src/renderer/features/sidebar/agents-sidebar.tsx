@@ -26,7 +26,7 @@ import {
 import { ArchivePopover } from "../agents/ui/archive-popover"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
-import { ClustersSidebarSection } from "../clusters"
+import { ClustersSidebarSection, selectedClustersCategoryAtom } from "../clusters"
 import { selectedWorkflowCategoryAtom } from "../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../mcp/atoms"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
@@ -96,8 +96,20 @@ import {
   justCreatedIdsAtom,
   undoStackAtom,
   pendingUserQuestionsAtom,
+  selectedSidebarTabAtom,
+  sidebarContentCollapsedAtom,
   type UndoItem,
 } from "../agents/atoms"
+import {
+  SidebarTabBar,
+  HistoryTabContent,
+  WorkspacesTabContent,
+  CommandsTabContent,
+  AgentsTabContent,
+  SkillsTabContent,
+  McpsTabContent,
+  ClustersTabContent,
+} from "./components"
 import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
@@ -1384,7 +1396,10 @@ export function AgentsSidebar({
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const setSelectedCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
+  const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
+  const selectedSidebarTab = useAtomValue(selectedSidebarTabAtom)
+  const isContentCollapsed = useAtomValue(sidebarContentCollapsedAtom)
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
@@ -1911,11 +1926,15 @@ export function AgentsSidebar({
       // Navigate to NewChatForm with this draft selected
       setSelectedChatId(null)
       setSelectedDraftId(draftId)
+      // Clear all category selections to show the new chat form
+      setSelectedCategory(null)
+      setSelectedMcpCategory(null)
+      setSelectedClustersCategory(null)
       if (isMobileFullscreen && onChatSelect) {
         onChatSelect()
       }
     },
-    [setSelectedChatId, setSelectedDraftId, isMobileFullscreen, onChatSelect],
+    [setSelectedChatId, setSelectedDraftId, setSelectedCategory, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect],
   )
 
   // Reset focused index when search query changes
@@ -1984,6 +2003,10 @@ export function AgentsSidebar({
     triggerHaptic("light")
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
+    // Clear all category selections to show the new chat form
+    setSelectedCategory(null)
+    setSelectedMcpCategory(null)
+    setSelectedClustersCategory(null)
     // On mobile, switch to chat mode to show NewChatForm
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
@@ -2055,12 +2078,14 @@ export function AgentsSidebar({
     setSelectedCategory(null)
     // Clear MCP category when chat is selected
     setSelectedMcpCategory(null)
+    // Clear clusters category when chat is selected
+    setSelectedClustersCategory(null)
 
     // On mobile, notify parent to switch to chat mode
     if (isMobileFullscreen && onChatSelect) {
       onChatSelect()
     }
-  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedCategory, setSelectedMcpCategory, isMobileFullscreen, onChatSelect])
+  }, [filteredChats, selectedChatId, selectedChatIds, toggleChatSelection, setSelectedChatIds, setSelectedChatId, setSelectedMcpCategory, setSelectedClustersCategory, isMobileFullscreen, onChatSelect])
 
   const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation()
@@ -2418,237 +2443,29 @@ export function AgentsSidebar({
         closeButtonRef={closeButtonRef}
       />
 
-      {/* Search and New Workspace */}
-      <div className="px-2 pb-3 flex-shrink-0">
-        <div className="space-y-2">
-          {/* Search Input */}
-          <div className="relative">
-            <Input
-              ref={searchInputRef}
-              placeholder="Search workspaces..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault()
-                  searchInputRef.current?.blur()
-                  setFocusedChatIndex(-1) // Reset focus
-                  return
-                }
+      {/* Tab bar for switching between views */}
+      <SidebarTabBar />
 
-                if (e.key === "ArrowDown") {
-                  e.preventDefault()
-                  setFocusedChatIndex((prev) => {
-                    // If no focus yet, start from first item
-                    if (prev === -1) return 0
-                    // Otherwise move down
-                    return prev < filteredChats.length - 1 ? prev + 1 : prev
-                  })
-                  return
-                }
-
-                if (e.key === "ArrowUp") {
-                  e.preventDefault()
-                  setFocusedChatIndex((prev) => {
-                    // If no focus yet, start from last item
-                    if (prev === -1) return filteredChats.length - 1
-                    // Otherwise move up
-                    return prev > 0 ? prev - 1 : prev
-                  })
-                  return
-                }
-
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  // Only open if something is focused (not -1)
-                  if (focusedChatIndex >= 0) {
-                    const focusedChat = filteredChats[focusedChatIndex]
-                    if (focusedChat) {
-                      handleChatClick(focusedChat.id)
-                      searchInputRef.current?.blur()
-                      setFocusedChatIndex(-1) // Reset focus after selection
-                    }
-                  }
-                  return
-                }
-              }}
-              className={cn(
-                "w-full rounded-lg text-sm bg-muted border border-input placeholder:text-muted-foreground/40",
-                isMobileFullscreen ? "h-10" : "h-7",
-              )}
-            />
-          </div>
-          {/* New Workspace Button */}
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              <ButtonCustom
-                onClick={handleNewAgent}
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "px-2 w-full hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground rounded-lg gap-1.5",
-                  isMobileFullscreen ? "h-10" : "h-7",
-                )}
-              >
-                <span className="text-sm font-medium">New Workspace</span>
-              </ButtonCustom>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              Start a new workspace
-              <Kbd>{getShortcutKey("newAgent")}</Kbd>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      {/* Scrollable Agents List */}
-      <div className="flex-1 min-h-0 relative">
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleAgentsScroll}
-          className={cn(
-            "h-full overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent",
-            isMultiSelectMode ? "px-0" : "px-2",
-          )}
-        >
-          {/* Drafts Section - always show if there are drafts */}
-          {drafts.length > 0 && !searchQuery && (
-            <div className={cn("mb-4", isMultiSelectMode ? "px-0" : "-mx-1")}>
-              <div
-                className={cn(
-                  "flex items-center h-4 mb-1",
-                  isMultiSelectMode ? "pl-3" : "pl-2",
-                )}
-              >
-                <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                  Drafts
-                </h3>
-              </div>
-              <div className="list-none p-0 m-0">
-                {drafts.map((draft) => (
-                  <DraftItem
-                    key={draft.id}
-                    draftId={draft.id}
-                    draftText={draft.text}
-                    draftUpdatedAt={draft.updatedAt}
-                    projectGitOwner={draft.project?.gitOwner}
-                    projectGitProvider={draft.project?.gitProvider}
-                    projectGitRepo={draft.project?.gitRepo}
-                    projectName={draft.project?.name}
-                    isSelected={selectedDraftId === draft.id && !selectedChatId}
-                    isMultiSelectMode={isMultiSelectMode}
-                    isMobileFullscreen={isMobileFullscreen}
-                    showIcon={showWorkspaceIcon}
-                    onSelect={handleDraftSelect}
-                    onDelete={handleDeleteDraft}
-                    formatTime={formatTime}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Chats Section */}
-          {filteredChats.length > 0 ? (
-            <div className={cn("mb-4", isMultiSelectMode ? "px-0" : "-mx-1")}>
-              {/* Pinned section */}
-              <ChatListSection
-                title="Pinned workspaces"
-                chats={pinnedAgents}
-                selectedChatId={selectedChatId}
-                focusedChatIndex={focusedChatIndex}
-                loadingChatIds={loadingChatIds}
-                unseenChanges={unseenChanges}
-                workspacePendingPlans={workspacePendingPlans}
-                workspacePendingQuestions={workspacePendingQuestions}
-                isMultiSelectMode={isMultiSelectMode}
-                selectedChatIds={selectedChatIds}
-                isMobileFullscreen={isMobileFullscreen}
-                isDesktop={isDesktop}
-                pinnedChatIds={pinnedChatIds}
-                projectsMap={projectsMap}
-                workspaceFileStats={workspaceFileStats}
-                filteredChats={filteredChats}
-                canShowPinOption={canShowPinOption}
-                areAllSelectedPinned={areAllSelectedPinned}
-                showIcon={showWorkspaceIcon}
-                onChatClick={handleChatClick}
-                onCheckboxClick={handleCheckboxClick}
-                onMouseEnter={handleAgentMouseEnter}
-                onMouseLeave={handleAgentMouseLeave}
-                onArchive={handleArchiveSingle}
-                onTogglePin={handleTogglePin}
-                onRenameClick={handleRenameClick}
-                onCopyBranch={handleCopyBranch}
-                onArchiveAllBelow={handleArchiveAllBelow}
-                onArchiveOthers={handleArchiveOthers}
-                onBulkPin={handleBulkPin}
-                onBulkUnpin={handleBulkUnpin}
-                onBulkArchive={handleBulkArchive}
-                archivePending={archiveChatMutation.isPending}
-                archiveBatchPending={archiveChatsBatchMutation.isPending}
-                nameRefCallback={nameRefCallback}
-                formatTime={formatTime}
-                justCreatedIds={justCreatedIds}
-              />
-
-              {/* Unpinned section */}
-              <ChatListSection
-                title={pinnedAgents.length > 0 ? "Recent workspaces" : "Workspaces"}
-                chats={unpinnedAgents}
-                selectedChatId={selectedChatId}
-                focusedChatIndex={focusedChatIndex}
-                loadingChatIds={loadingChatIds}
-                unseenChanges={unseenChanges}
-                workspacePendingPlans={workspacePendingPlans}
-                workspacePendingQuestions={workspacePendingQuestions}
-                isMultiSelectMode={isMultiSelectMode}
-                selectedChatIds={selectedChatIds}
-                isMobileFullscreen={isMobileFullscreen}
-                isDesktop={isDesktop}
-                pinnedChatIds={pinnedChatIds}
-                projectsMap={projectsMap}
-                workspaceFileStats={workspaceFileStats}
-                filteredChats={filteredChats}
-                canShowPinOption={canShowPinOption}
-                areAllSelectedPinned={areAllSelectedPinned}
-                showIcon={showWorkspaceIcon}
-                onChatClick={handleChatClick}
-                onCheckboxClick={handleCheckboxClick}
-                onMouseEnter={handleAgentMouseEnter}
-                onMouseLeave={handleAgentMouseLeave}
-                onArchive={handleArchiveSingle}
-                onTogglePin={handleTogglePin}
-                onRenameClick={handleRenameClick}
-                onCopyBranch={handleCopyBranch}
-                onArchiveAllBelow={handleArchiveAllBelow}
-                onArchiveOthers={handleArchiveOthers}
-                onBulkPin={handleBulkPin}
-                onBulkUnpin={handleBulkUnpin}
-                onBulkArchive={handleBulkArchive}
-                archivePending={archiveChatMutation.isPending}
-                archiveBatchPending={archiveChatsBatchMutation.isPending}
-                nameRefCallback={nameRefCallback}
-                formatTime={formatTime}
-                justCreatedIds={justCreatedIds}
-              />
-            </div>
+      {/* Tab-specific content - hide when collapsed */}
+      {!isContentCollapsed && (
+        <>
+          {selectedSidebarTab === "history" ? (
+            <HistoryTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "chats" ? (
+            <WorkspacesTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "commands" ? (
+            <CommandsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "agents" ? (
+            <AgentsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "skills" ? (
+            <SkillsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "mcps" ? (
+            <McpsTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
+          ) : selectedSidebarTab === "clusters" ? (
+            <ClustersTabContent isMobileFullscreen={isMobileFullscreen} className="flex-1" />
           ) : null}
-        </div>
-
-        {/* Top gradient fade (appears when scrolled down) */}
-        {/* Top gradient fade (appears when scrolled down) */}
-        <div
-          ref={topGradientRef}
-          className="absolute top-0 left-0 right-0 h-10 pointer-events-none bg-gradient-to-b from-tl-background via-tl-background/50 to-transparent transition-opacity duration-200 opacity-0"
-        />
-
-        {/* Bottom gradient fade */}
-        <div
-          ref={bottomGradientRef}
-          className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none bg-gradient-to-t from-tl-background via-tl-background/50 to-transparent transition-opacity duration-200 opacity-0"
-        />
-      </div>
+        </>
+      )}
 
       {/* Workflows Section */}
       <WorkflowsSidebarSection />

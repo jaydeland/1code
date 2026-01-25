@@ -1,10 +1,12 @@
 "use client"
 
+import { useEffect } from "react"
 import { useAtomValue } from "jotai"
 import { selectedWorkflowNodeAtom, workflowViewModeAtom } from "../atoms"
 import { WorkflowDetailHeader } from "./workflow-detail-header"
 import { WorkflowMarkdownView } from "./workflow-markdown-view"
 import { WorkflowReactFlowView } from "./workflow-reactflow-view"
+import { WorkflowMcpView } from "./workflow-mcp-view"
 
 /**
  * Detail panel for viewing workflow file content
@@ -13,6 +15,11 @@ import { WorkflowReactFlowView } from "./workflow-reactflow-view"
 export function WorkflowDetail() {
   const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
   const viewMode = useAtomValue(workflowViewModeAtom)
+
+  // Debug logging
+  useEffect(() => {
+    console.log("[workflow-detail] selectedNode:", selectedNode)
+  }, [selectedNode])
 
   if (!selectedNode) {
     return (
@@ -26,6 +33,17 @@ export function WorkflowDetail() {
     )
   }
 
+  // MCPs have custom view (no markdown files)
+  if (selectedNode.type === "mcpServer") {
+    return (
+      <div className="flex flex-col h-full">
+        <WorkflowDetailHeader />
+        <WorkflowMcpView />
+      </div>
+    )
+  }
+
+  // Agents, Commands, Skills show markdown or flowchart
   return (
     <div className="flex flex-col h-full">
       <WorkflowDetailHeader />

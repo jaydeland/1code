@@ -169,7 +169,7 @@ export function MobileChatHeader({
                 "flex items-center gap-1.5 h-7 px-2 rounded-md text-sm",
                 "bg-muted/50 hover:bg-muted transition-colors",
                 "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-                "min-w-0 max-w-[50vw] shrink",
+                "min-w-0 max-w-[70vw] shrink",
               )}
               style={{
                 // @ts-expect-error - WebKit-specific property

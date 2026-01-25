@@ -14,6 +14,8 @@ import { trpc } from "../../../../lib/trpc";
 import { cn } from "../../../../lib/utils";
 import { usePRStatus } from "../../../../hooks/usePRStatus";
 import { PRIcon } from "../pr-icon";
+import { useAtomValue } from "jotai";
+import { selectedProjectAtom, selectedAgentChatIdAtom } from "../../../agents/atoms";
 
 type LayoutMode = "compact" | "standard" | "wide" | "full";
 
@@ -43,6 +45,20 @@ export function ChangesPanelHeader({
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [displayTime, setDisplayTime] = useState<string>("");
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+	const selectedProject = useAtomValue(selectedProjectAtom);
+	const selectedChatId = useAtomValue(selectedAgentChatIdAtom);
+
+	// Query git status for repository info
+	const { data: gitStatus } = trpc.projects.getGitStatus.useQuery(
+		{
+			id: selectedProject?.id!,
+			chatId: selectedChatId ?? undefined,
+		},
+		{
+			enabled: !!selectedProject?.id,
+		}
+	);
 
 	const { data: branchData, refetch: refetchBranches } = trpc.changes.getBranches.useQuery(
 		{ worktreePath },
@@ -114,6 +130,16 @@ export function ChangesPanelHeader({
 				isCompact && "px-1.5 py-1",
 			)}
 		>
+			{/* Repository name */}
+			{gitStatus?.gitOwner && gitStatus?.gitRepo && !isCompact && (
+				<div className="flex items-center gap-1.5 text-xs text-muted-foreground px-1.5">
+					<span className="font-mono truncate max-w-[150px]">
+						{gitStatus.gitOwner}/{gitStatus.gitRepo}
+					</span>
+					<span className="text-muted-foreground/50">•</span>
+				</div>
+			)}
+
 			{/* Branch selector */}
 			<DropdownMenu>
 				<Tooltip>
