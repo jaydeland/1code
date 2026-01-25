@@ -42,6 +42,8 @@ export interface AssistantResponseNodeData {
   id: string
   text: string
   hasTools: boolean
+  inputTokens?: number
+  outputTokens?: number
   onClick: () => void
 }
 
@@ -49,6 +51,8 @@ export interface ToolCallNodeData {
   toolCallId: string
   toolName: string
   state: "call" | "result" | "error"
+  count?: number // Number of times this tool was invoked (for Thinking and Bash)
+  commandPreview?: string // Preview of bash command (for Bash nodes)
   onClick: () => void
 }
 
@@ -78,10 +82,23 @@ export const UserMessageNode = memo(function UserMessageNode({
   )
 })
 
+/**
+ * Format token count with compact notation (e.g., 1,234 or 12.3k)
+ */
+function formatTokenCount(count: number | undefined): string {
+  if (count === undefined || count === 0) return "0"
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`
+  }
+  return count.toLocaleString()
+}
+
 // Assistant Response Node - Purple, in main chain with right handle for tool branches
 export const AssistantResponseNode = memo(function AssistantResponseNode({
   data,
 }: NodeProps<AssistantResponseNodeData>) {
+  const hasTokenData = data.inputTokens !== undefined || data.outputTokens !== undefined
+
   return (
     <div
       className="px-3 py-2 shadow-md rounded-lg bg-purple-500 text-white border border-purple-600 min-w-[160px] max-w-[180px] cursor-pointer hover:bg-purple-600 transition-colors"
@@ -92,6 +109,12 @@ export const AssistantResponseNode = memo(function AssistantResponseNode({
         <Bot className="h-4 w-4 flex-shrink-0" />
         <span className="text-xs truncate">{data.text || "..."}</span>
       </div>
+      {/* Token counts footer */}
+      {hasTokenData && (
+        <div className="mt-1 pt-1 border-t border-purple-400/30 text-[9px] text-purple-200 font-mono">
+          {formatTokenCount(data.inputTokens)} in / {formatTokenCount(data.outputTokens)} out
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} className="!bg-purple-700" />
       {/* Right handle for tool branches */}
       {data.hasTools && (
@@ -127,8 +150,20 @@ export const ToolCallNode = memo(function ToolCallNode({
       <Handle type="target" position={Position.Left} className="!bg-slate-600" />
       <div className="flex items-center gap-1.5">
         <Icon className="h-3 w-3 flex-shrink-0" />
-        <span className="text-[10px] font-mono truncate">{data.toolName}</span>
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          <span className="text-[10px] font-mono truncate">{data.toolName}</span>
+          {data.count && data.count > 1 && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-white/20 font-mono flex-shrink-0">
+              ×{data.count}
+            </span>
+          )}
+        </div>
       </div>
+      {data.commandPreview && (
+        <div className="text-[9px] font-mono truncate mt-0.5 opacity-80">
+          {data.commandPreview}
+        </div>
+      )}
     </div>
   )
 })

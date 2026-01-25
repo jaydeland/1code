@@ -6,7 +6,6 @@ import { atom } from "jotai"
 import ReactFlow, {
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   ReactFlowProvider,
@@ -43,22 +42,6 @@ function useAllMessages(): Message[] {
   )
 
   return useAtomValue(allMessagesAtom)
-}
-
-// MiniMap node color function
-function getNodeColor(node: Node): string {
-  switch (node.type) {
-    case "userMessage":
-      return "#3b82f6" // blue
-    case "assistantResponse":
-      return "#9333ea" // purple
-    case "toolCall":
-      return "#06b6d4" // cyan
-    case "agentSpawn":
-      return "#f59e0b" // amber
-    default:
-      return "#64748b" // slate
-  }
 }
 
 function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
@@ -106,13 +89,6 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
           showFitView={true}
           showInteractive={false}
           position="bottom-left"
-        />
-        <MiniMap
-          nodeColor={getNodeColor}
-          maskColor="rgba(0, 0, 0, 0.1)"
-          position="bottom-right"
-          pannable
-          zoomable
         />
       </ReactFlow>
     </div>

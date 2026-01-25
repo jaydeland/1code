@@ -13,22 +13,15 @@ const X_BRANCH = 240 // Branch x position (tools to right)
 const Y_SPACING = 70 // Vertical spacing between main nodes
 const Y_BRANCH_SPACING = 40 // Vertical spacing for branch nodes
 
-// Tools that should branch to the right (execution tools)
+// Tools that should branch to the right (opt-in list)
+// Show: agents, bash, thinking, questions, and web research
 const BRANCHING_TOOLS = new Set([
-  "Bash",
-  "Edit",
-  "Write",
-  "Read",
-  "Grep",
-  "Glob",
-  "WebFetch",
-  "WebSearch",
-  "Task",
-  "TodoWrite",
-  "NotebookEdit",
-  "AskUserQuestion",
-  "KillShell",
-  "TaskOutput",
+  "Task",              // Agent spawns and background tasks
+  "Bash",              // Shell commands
+  "Thinking",          // Internal reasoning
+  "AskUserQuestion",   // Questions to user
+  "WebSearch",         // Web searches
+  "WebFetch",          // Web page fetches
 ])
 
 interface TransformOptions {
@@ -135,6 +128,8 @@ export function transformMessagesToFlow(
 
       // Create assistant response node
       const responseNodeId = `response-${message.id}`
+      // Extract token data from message metadata (flat structure from transform.ts)
+      const metadata = message.metadata as { inputTokens?: number; outputTokens?: number } | undefined
       nodes.push({
         id: responseNodeId,
         type: "assistantResponse",
@@ -143,6 +138,8 @@ export function transformMessagesToFlow(
           id: message.id,
           text: text || "...",
           hasTools,
+          inputTokens: metadata?.inputTokens,
+          outputTokens: metadata?.outputTokens,
           onClick: () => options.onNodeClick(message.id),
         } as AssistantResponseNodeData,
       })
@@ -163,61 +160,162 @@ export function transformMessagesToFlow(
       let branchY = currentMainY
       let branchIndex = 0
 
+      // Track unique bash commands and thinking invocations for consolidation
+      const bashCommands = new Map<string, { count: number; firstPartIndex: number; state: "call" | "result" | "error" }>()
+      let thinkingCount = 0
+      let thinkingFirstPartIndex = -1
+      let thinkingState: "call" | "result" | "error" = "call"
+
+      // First pass: collect and count tools
       for (let partIndex = 0; partIndex < parts.length; partIndex++) {
         const part = parts[partIndex]
 
-        // New format: type is "tool-{toolName}" (e.g., "tool-Bash", "tool-Read")
         if (part.type?.startsWith("tool-")) {
           const toolName = part.type.replace("tool-", "")
 
-          if (BRANCHING_TOOLS.has(toolName)) {
-            const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
+          if (toolName === "Thinking") {
+            if (thinkingCount === 0) {
+              thinkingFirstPartIndex = partIndex
+            }
+            thinkingCount++
+            const state = getToolState(part)
+            if (state === "error") thinkingState = "error"
+            else if (state === "result" && thinkingState !== "error") thinkingState = "result"
+          } else if (toolName === "Bash") {
+            const command = part.input?.command || "bash"
+            const existing = bashCommands.get(command)
             const state = getToolState(part)
 
-            // Check if this is a Task agent spawn
-            if (toolName === "Task") {
-              nodes.push({
-                id: toolNodeId,
-                type: "agentSpawn",
-                position: { x: X_BRANCH, y: branchY },
-                data: {
-                  agentId: part.toolCallId || "",
-                  description: truncateText(part.input?.description || part.input?.prompt, 20),
-                  status: state === "error" ? "error" : state === "result" ? "completed" : "running",
-                  onClick: () => options.onNodeClick(message.id, partIndex),
-                } as AgentSpawnNodeData,
-              })
+            if (existing) {
+              existing.count++
+              // Update state priority: error > result > call
+              if (state === "error") existing.state = "error"
+              else if (state === "result" && existing.state !== "error") existing.state = "result"
             } else {
-              nodes.push({
-                id: toolNodeId,
-                type: "toolCall",
-                position: { x: X_BRANCH, y: branchY },
-                data: {
-                  toolCallId: part.toolCallId || "",
-                  toolName,
-                  state,
-                  onClick: () => options.onNodeClick(message.id, partIndex),
-                } as ToolCallNodeData,
-              })
+              bashCommands.set(command, { count: 1, firstPartIndex: partIndex, state })
             }
-
-            // Connect tool to response node (horizontal branch)
-            edges.push({
-              id: `${responseNodeId}-${toolNodeId}`,
-              source: responseNodeId,
-              sourceHandle: "tools",
-              target: toolNodeId,
-              animated: state === "call",
-              style: {
-                stroke: state === "error" ? "#ef4444" : "#ec4899",
-                strokeWidth: 1.5,
-              },
-            })
-
-            branchY += Y_BRANCH_SPACING
-            branchIndex++
           }
         }
+      }
+
+      // Second pass: create nodes for unique tools
+      for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+        const part = parts[partIndex]
+
+        if (part.type?.startsWith("tool-")) {
+          const toolName = part.type.replace("tool-", "")
+
+          if (!BRANCHING_TOOLS.has(toolName)) continue
+
+          // Skip Thinking - handled after loop
+          if (toolName === "Thinking") continue
+
+          // For Bash, only create node for first occurrence of each unique command
+          if (toolName === "Bash") {
+            const command = part.input?.command || "bash"
+            const bashData = bashCommands.get(command)
+            if (!bashData || bashData.firstPartIndex !== partIndex) continue // Skip duplicates
+          }
+
+          const toolNodeId = `tool-${message.id}-${part.toolCallId || partIndex}`
+          const state = getToolState(part)
+
+          // Check if this is a Task agent spawn
+          if (toolName === "Task") {
+            nodes.push({
+              id: toolNodeId,
+              type: "agentSpawn",
+              position: { x: X_BRANCH, y: branchY },
+              data: {
+                agentId: part.toolCallId || "",
+                description: truncateText(part.input?.description || part.input?.prompt, 20),
+                status: state === "error" ? "error" : state === "result" ? "completed" : "running",
+                onClick: () => options.onNodeClick(message.id, partIndex),
+              } as AgentSpawnNodeData,
+            })
+          } else if (toolName === "Bash") {
+            const command = part.input?.command || "bash"
+            const bashData = bashCommands.get(command)
+            const count = bashData?.count || 1
+            const consolidatedState = bashData?.state || state
+
+            nodes.push({
+              id: toolNodeId,
+              type: "toolCall",
+              position: { x: X_BRANCH, y: branchY },
+              data: {
+                toolCallId: part.toolCallId || "",
+                toolName,
+                state: consolidatedState,
+                count: count > 1 ? count : undefined, // Only show count if > 1
+                commandPreview: truncateText(command, 30),
+                onClick: () => options.onNodeClick(message.id, partIndex),
+              } as ToolCallNodeData,
+            })
+          } else {
+            nodes.push({
+              id: toolNodeId,
+              type: "toolCall",
+              position: { x: X_BRANCH, y: branchY },
+              data: {
+                toolCallId: part.toolCallId || "",
+                toolName,
+                state,
+                onClick: () => options.onNodeClick(message.id, partIndex),
+              } as ToolCallNodeData,
+            })
+          }
+
+          // Connect tool to response node (horizontal branch)
+          edges.push({
+            id: `${responseNodeId}-${toolNodeId}`,
+            source: responseNodeId,
+            sourceHandle: "tools",
+            target: toolNodeId,
+            animated: state === "call",
+            style: {
+              stroke: state === "error" ? "#ef4444" : "#ec4899",
+              strokeWidth: 1.5,
+            },
+          })
+
+          branchY += Y_BRANCH_SPACING
+          branchIndex++
+        }
+      }
+
+      // Add consolidated Thinking node if there were any
+      if (thinkingCount > 0 && thinkingFirstPartIndex >= 0) {
+        const toolNodeId = `tool-${message.id}-thinking`
+
+        nodes.push({
+          id: toolNodeId,
+          type: "toolCall",
+          position: { x: X_BRANCH, y: branchY },
+          data: {
+            toolCallId: "thinking",
+            toolName: "Thinking",
+            state: thinkingState,
+            count: thinkingCount,
+            onClick: () => options.onNodeClick(message.id, thinkingFirstPartIndex),
+          } as ToolCallNodeData,
+        })
+
+        // Connect thinking node to response node
+        edges.push({
+          id: `${responseNodeId}-${toolNodeId}`,
+          source: responseNodeId,
+          sourceHandle: "tools",
+          target: toolNodeId,
+          animated: thinkingState === "call",
+          style: {
+            stroke: thinkingState === "error" ? "#ef4444" : "#ec4899",
+            strokeWidth: 1.5,
+          },
+        })
+
+        branchY += Y_BRANCH_SPACING
+        branchIndex++
       }
 
       // Advance main Y position - account for tool branches
