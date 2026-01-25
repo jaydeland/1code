@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm"
 import { Copy, Check } from "lucide-react"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
+import { ReactFlowCodeBlock } from "./reactflow-code-block"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
@@ -135,7 +136,7 @@ function CodeBlock({
   )
 }
 
-type MarkdownSize = "sm" | "md" | "lg"
+export type MarkdownSize = "sm" | "md" | "lg"
 
 interface ChatMarkdownRendererProps {
   content: string
@@ -251,6 +252,11 @@ function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: type
     const match = /language-(\w+)/.exec(className || "")
     const language = match ? match[1] : undefined
     const codeContent = String(children)
+
+    // Handle ReactFlow blocks - render interactive diagram
+    if (language === "reactflow") {
+      return <ReactFlowCodeBlock code={codeContent.replace(/\n$/, "")} size={size} />
+    }
 
     // Check if this is a code block (has language) or inline code
     // Streamdown wraps code blocks in <pre><code>, inline code is just <code>

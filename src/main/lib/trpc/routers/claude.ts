@@ -182,6 +182,99 @@ const PLAN_MODE_BLOCKED_TOOLS = new Set([
   "NotebookEdit",
 ])
 
+/**
+ * Interactive React component instructions appended to system prompt
+ * Enables Claude to return executable React/TSX code in sandboxed iframes
+ */
+const INTERACTIVE_COMPONENT_INSTRUCTIONS = `
+## Interactive React Components
+
+You can return interactive React components using \`\`\`reactflow code blocks. Code runs in a secure sandboxed iframe with full React support.
+
+### Example 1: Simple Diagram (Static Data)
+For flowcharts and diagrams, define nodes and edges:
+
+\`\`\`reactflow
+const nodes = [
+  { id: '1', position: { x: 0, y: 0 }, data: { label: 'Start' } },
+  { id: '2', position: { x: 200, y: 100 }, data: { label: 'Process' } },
+];
+const edges = [
+  { id: 'e1-2', source: '1', target: '2' },
+];
+export default { nodes, edges };
+\`\`\`
+
+### Example 2: Interactive Component
+For dynamic UI with state and interactivity, write full React/TSX:
+
+\`\`\`reactflow
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div style={{ padding: 20, fontFamily: 'system-ui' }}>
+      <h2>Counter: {count}</h2>
+      <button onClick={() => setCount(c => c + 1)} style={{ padding: '8px 16px', fontSize: 16 }}>
+        Increment
+      </button>
+      <button onClick={() => setCount(0)} style={{ padding: '8px 16px', fontSize: 16, marginLeft: 8 }}>
+        Reset
+      </button>
+    </div>
+  );
+}
+
+export default Counter;
+\`\`\`
+
+### Example 3: Interactive Flow Diagram
+Combine ReactFlow with React state for editable diagrams:
+
+\`\`\`reactflow
+function EditableFlow() {
+  const [nodes, setNodes, onNodesChange] = useNodesState([
+    { id: '1', position: { x: 100, y: 0 }, data: { label: 'Drag me!' } },
+    { id: '2', position: { x: 0, y: 100 }, data: { label: 'Node 2' } },
+    { id: '3', position: { x: 200, y: 100 }, data: { label: 'Node 3' } },
+  ]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([
+    { id: 'e1-2', source: '1', target: '2', animated: true },
+    { id: 'e1-3', source: '1', target: '3' },
+  ]);
+
+  return (
+    <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView>
+      <Background />
+      <Controls />
+      <MiniMap />
+    </ReactFlow>
+  );
+}
+
+export default EditableFlow;
+\`\`\`
+
+### Available APIs in Sandbox
+- **React**: useState, useEffect, useCallback, useMemo, useRef, React.createElement
+- **ReactFlow**: ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, Handle, Position
+- **Styling**: Inline styles work. No external CSS imports.
+
+### Guidelines
+- Export a React component function or return a React element
+- For simple diagrams: just export { nodes, edges }
+- All code runs in an isolated iframe (no access to parent window, Node.js, or filesystem)
+- Use inline styles for custom styling
+- Console.log/warn/error are forwarded to the parent console
+
+### Use Cases
+- **Diagrams**: Architecture, flowcharts, state machines, dependency graphs
+- **Interactive demos**: Counters, forms, calculators, mini-apps
+- **Data visualization**: Custom charts, progress indicators, dashboards
+- **Prototypes**: Quick UI mockups, component previews
+- **Educational**: Interactive code examples, algorithm visualizations
+`
+
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
     if (subChatId && pending.subChatId !== subChatId) continue
@@ -1055,10 +1148,10 @@ ${prompt}
               console.log('[Ollama] Context prefix added to prompt')
             }
 
-            // System prompt config - use preset for both Claude and Ollama
+            // System prompt config - use preset with interactive component instructions appended
             const systemPromptConfig = {
-              type: "preset" as const,
-              preset: "claude_code" as const,
+              type: "default_with_custom" as const,
+              custom: INTERACTIVE_COMPONENT_INSTRUCTIONS,
             }
 
             const queryOptions = {
