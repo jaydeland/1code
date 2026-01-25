@@ -148,15 +148,8 @@ export function ClusterDetail() {
     )
   }
 
-  if (!selectedClusterId) {
-    return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        Select a cluster to view details
-      </div>
-    )
-  }
-
-  if (clusterLoading) {
+  // Show loading while auto-select effect runs or cluster details load
+  if (!selectedClusterId || clusterLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
