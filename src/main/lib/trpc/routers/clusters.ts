@@ -53,11 +53,17 @@ function getStoredCredentials(): AwsCredentials | null {
     return null
   }
 
-  return {
-    accessKeyId: settings.awsAccessKeyId,
-    secretAccessKey: settings.awsSecretAccessKey,
-    sessionToken: settings.awsSessionToken,
-    expiration: settings.awsCredentialsExpiresAt || new Date(),
+  // Decrypt credentials before returning
+  try {
+    return {
+      accessKeyId: decrypt(settings.awsAccessKeyId),
+      secretAccessKey: decrypt(settings.awsSecretAccessKey),
+      sessionToken: decrypt(settings.awsSessionToken),
+      expiration: settings.awsCredentialsExpiresAt || new Date(),
+    }
+  } catch (error) {
+    console.error("[clusters] Failed to decrypt AWS credentials:", error)
+    return null
   }
 }
 
