@@ -104,6 +104,12 @@ export const claudeSettingsRouter = router({
       anthropicBaseUrl: settings.anthropicBaseUrl || null,
       vpnCheckEnabled: settings.vpnCheckEnabled || false,
       vpnCheckUrl: settings.vpnCheckUrl || null,
+      // Bedrock model overrides
+      bedrockOpusModel: settings.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0",
+      bedrockSonnetModel: settings.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
+      bedrockHaikuModel: settings.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
+      maxMcpOutputTokens: settings.maxMcpOutputTokens ?? 200000,
+      maxThinkingTokens: settings.maxThinkingTokens ?? 1000000,
     }
   }),
 
@@ -124,6 +130,12 @@ export const claudeSettingsRouter = router({
         anthropicBaseUrl: z.string().nullable().optional(), // Custom Anthropic API base URL
         vpnCheckEnabled: z.boolean().optional(), // Enable/disable VPN status monitoring
         vpnCheckUrl: z.string().nullable().optional(), // Internal URL to check for VPN connectivity
+        // Bedrock model overrides
+        bedrockOpusModel: z.string().optional(),
+        bedrockSonnetModel: z.string().optional(),
+        bedrockHaikuModel: z.string().optional(),
+        maxMcpOutputTokens: z.number().optional(),
+        maxThinkingTokens: z.number().optional(),
       })
     )
     .mutation(({ input }) => {
@@ -182,6 +194,22 @@ export const claudeSettingsRouter = router({
             ...(input.vpnCheckUrl !== undefined && {
               vpnCheckUrl: input.vpnCheckUrl,
             }),
+            // Bedrock model overrides
+            ...(input.bedrockOpusModel !== undefined && {
+              bedrockOpusModel: input.bedrockOpusModel,
+            }),
+            ...(input.bedrockSonnetModel !== undefined && {
+              bedrockSonnetModel: input.bedrockSonnetModel,
+            }),
+            ...(input.bedrockHaikuModel !== undefined && {
+              bedrockHaikuModel: input.bedrockHaikuModel,
+            }),
+            ...(input.maxMcpOutputTokens !== undefined && {
+              maxMcpOutputTokens: input.maxMcpOutputTokens,
+            }),
+            ...(input.maxThinkingTokens !== undefined && {
+              maxThinkingTokens: input.maxThinkingTokens,
+            }),
             updatedAt: new Date(),
           })
           .where(eq(claudeCodeSettings.id, "default"))
@@ -200,6 +228,12 @@ export const claudeSettingsRouter = router({
             anthropicBaseUrl: input.anthropicBaseUrl ?? null,
             vpnCheckEnabled: input.vpnCheckEnabled ?? false,
             vpnCheckUrl: input.vpnCheckUrl ?? null,
+            // Bedrock model overrides
+            bedrockOpusModel: input.bedrockOpusModel ?? "global.anthropic.claude-opus-4-5-20251101-v1:0",
+            bedrockSonnetModel: input.bedrockSonnetModel ?? "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]",
+            bedrockHaikuModel: input.bedrockHaikuModel ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
+            maxMcpOutputTokens: input.maxMcpOutputTokens ?? 200000,
+            maxThinkingTokens: input.maxThinkingTokens ?? 1000000,
             ...(input.authMode === "apiKey" && input.apiKey && {
               apiKey: encryptApiKey(input.apiKey),
             }),

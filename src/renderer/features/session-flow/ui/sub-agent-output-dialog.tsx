@@ -110,7 +110,10 @@ export const SubAgentOutputDialog = memo(function SubAgentOutputDialog({
                 )}
                 <span className="truncate">{selectedAgent.description}</span>
               </DialogTitle>
-              <DialogDescription className="flex items-center gap-2 flex-wrap">
+              <DialogDescription>
+                Sub-agent execution details
+              </DialogDescription>
+              <div className="flex items-center gap-2 flex-wrap pt-2">
                 <Badge variant="outline" className="text-[10px] font-mono">
                   {selectedAgent.agentId}
                 </Badge>
@@ -130,7 +133,7 @@ export const SubAgentOutputDialog = memo(function SubAgentOutputDialog({
                     Duration: {duration}
                   </span>
                 )}
-              </DialogDescription>
+              </div>
             </DialogHeader>
 
             {/* Output content */}

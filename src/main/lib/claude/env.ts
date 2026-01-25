@@ -300,12 +300,20 @@ export function buildClaudeEnv(options?: {
     env.AWS_REGION = awsCreds.region
     env.AWS_DEFAULT_REGION = awsCreds.region
 
-    // Bedrock model defaults (cross-region inference enabled with [1m] suffix)
-    env.ANTHROPIC_DEFAULT_OPUS_MODEL = "global.anthropic.claude-opus-4-5-20251101-v1:0"
-    env.ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
-    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"
-    env.MAX_MCP_OUTPUT_TOKENS = "200000"
-    env.MAX_THINKING_TOKENS = "1000000"
+    // Read Bedrock model overrides from settings
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    // Bedrock model defaults (use settings or fall back to defaults)
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL = settings?.bedrockOpusModel || "global.anthropic.claude-opus-4-5-20251101-v1:0"
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL = settings?.bedrockSonnetModel || "us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = settings?.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"
+    env.MAX_MCP_OUTPUT_TOKENS = String(settings?.maxMcpOutputTokens ?? 200000)
+    env.MAX_THINKING_TOKENS = String(settings?.maxThinkingTokens ?? 1000000)
 
     // Only set credentials if available (SSO mode)
     // Profile mode will use AWS SDK's default credential chain

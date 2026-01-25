@@ -13,7 +13,7 @@ export type TerminalEvent = TerminalDataEvent | TerminalExitEvent
 
 export interface TerminalProps {
   paneId: string
-  cwd: string
+  cwd?: string
   workspaceId?: string
   tabId?: string
   initialCommands?: string[]

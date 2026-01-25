@@ -53,7 +53,7 @@ export function TerminalMainView() {
     { enabled: !!selectedChatId }
   )
   const worktreePath = chatData?.worktreePath as string | undefined
-  const cwd = worktreePath || selectedProject?.path || "~"
+  const cwd = worktreePath || selectedProject?.path || undefined
   const terminalContextId = selectedChatId || GLOBAL_TERMINAL_ID
   const terminalBg = useMemo(() => {
     if (fullThemeData?.colors?.["terminal.background"]) return fullThemeData.colors["terminal.background"]

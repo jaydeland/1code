@@ -10,9 +10,9 @@ import { cn } from "../../../lib/utils"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
-  opus: 200_000,
-  sonnet: 200_000,
-  haiku: 200_000,
+  opus: 1_000_000,
+  sonnet: 1_000_000,
+  haiku: 1_000_000,
 } as const
 
 type ModelId = keyof typeof CONTEXT_WINDOWS

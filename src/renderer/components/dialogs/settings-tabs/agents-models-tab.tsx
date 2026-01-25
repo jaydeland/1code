@@ -53,6 +53,35 @@ export function AgentsModelsTab() {
   // Get SDK version info
   const { data: versionInfo } = trpc.claude.getVersionInfo.useQuery()
 
+  // Bedrock model settings
+  const { data: claudeSettings, refetch: refetchSettings } = trpc.claudeSettings.getSettings.useQuery()
+  const updateSettings = trpc.claudeSettings.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Bedrock settings saved")
+      refetchSettings()
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to save settings")
+    },
+  })
+
+  const [bedrockOpusModel, setBedrockOpusModel] = useState("")
+  const [bedrockSonnetModel, setBedrockSonnetModel] = useState("")
+  const [bedrockHaikuModel, setBedrockHaikuModel] = useState("")
+  const [maxMcpOutputTokens, setMaxMcpOutputTokens] = useState("")
+  const [maxThinkingTokens, setMaxThinkingTokens] = useState("")
+
+  // Sync from settings
+  useEffect(() => {
+    if (claudeSettings) {
+      setBedrockOpusModel(claudeSettings.bedrockOpusModel || "")
+      setBedrockSonnetModel(claudeSettings.bedrockSonnetModel || "")
+      setBedrockHaikuModel(claudeSettings.bedrockHaikuModel || "")
+      setMaxMcpOutputTokens(String(claudeSettings.maxMcpOutputTokens || ""))
+      setMaxThinkingTokens(String(claudeSettings.maxThinkingTokens || ""))
+    }
+  }, [claudeSettings])
+
   useEffect(() => {
     setModel(storedConfig.model)
     setBaseUrl(storedConfig.baseUrl)
@@ -295,6 +324,132 @@ export function AgentsModelsTab() {
             Save
           </Button>
         </div>
+        </div>
+      </div>
+
+      {/* AWS Bedrock Environment Variables */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">
+            AWS Bedrock Configuration
+          </h4>
+          <p className="text-xs text-muted-foreground mt-1">
+            Model IDs and token limits for AWS Bedrock API (only applies when using AWS auth mode)
+          </p>
+        </div>
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-6">
+            {/* Opus Model */}
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Opus Model ID</Label>
+                <p className="text-xs text-muted-foreground">
+                  ANTHROPIC_DEFAULT_OPUS_MODEL
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  value={bedrockOpusModel}
+                  onChange={(e) => setBedrockOpusModel(e.target.value)}
+                  className="w-full font-mono text-xs"
+                  placeholder="global.anthropic.claude-opus-4-5-20251101-v1:0"
+                />
+              </div>
+            </div>
+
+            {/* Sonnet Model */}
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Sonnet Model ID</Label>
+                <p className="text-xs text-muted-foreground">
+                  ANTHROPIC_DEFAULT_SONNET_MODEL
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  value={bedrockSonnetModel}
+                  onChange={(e) => setBedrockSonnetModel(e.target.value)}
+                  className="w-full font-mono text-xs"
+                  placeholder="us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"
+                />
+              </div>
+            </div>
+
+            {/* Haiku Model */}
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Haiku Model ID</Label>
+                <p className="text-xs text-muted-foreground">
+                  ANTHROPIC_DEFAULT_HAIKU_MODEL
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  value={bedrockHaikuModel}
+                  onChange={(e) => setBedrockHaikuModel(e.target.value)}
+                  className="w-full font-mono text-xs"
+                  placeholder="us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"
+                />
+              </div>
+            </div>
+
+            {/* Max MCP Output Tokens */}
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Max MCP Output Tokens</Label>
+                <p className="text-xs text-muted-foreground">
+                  MAX_MCP_OUTPUT_TOKENS
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  type="number"
+                  value={maxMcpOutputTokens}
+                  onChange={(e) => setMaxMcpOutputTokens(e.target.value)}
+                  className="w-full"
+                  placeholder="200000"
+                />
+              </div>
+            </div>
+
+            {/* Max Thinking Tokens */}
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Max Thinking Tokens</Label>
+                <p className="text-xs text-muted-foreground">
+                  MAX_THINKING_TOKENS
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-80">
+                <Input
+                  type="number"
+                  value={maxThinkingTokens}
+                  onChange={(e) => setMaxThinkingTokens(e.target.value)}
+                  className="w-full"
+                  placeholder="1000000"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted p-3 rounded-b-lg flex justify-end gap-2 border-t">
+            <Button
+              size="sm"
+              onClick={() => {
+                updateSettings.mutate({
+                  bedrockOpusModel: bedrockOpusModel || undefined,
+                  bedrockSonnetModel: bedrockSonnetModel || undefined,
+                  bedrockHaikuModel: bedrockHaikuModel || undefined,
+                  maxMcpOutputTokens: maxMcpOutputTokens ? parseInt(maxMcpOutputTokens, 10) : undefined,
+                  maxThinkingTokens: maxThinkingTokens ? parseInt(maxThinkingTokens, 10) : undefined,
+                })
+              }}
+              disabled={updateSettings.isPending}
+            >
+              {updateSettings.isPending && <span className="mr-2">...</span>}
+              Save Bedrock Settings
+            </Button>
+          </div>
         </div>
       </div>
     </div>

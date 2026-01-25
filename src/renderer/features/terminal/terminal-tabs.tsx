@@ -39,7 +39,7 @@ interface TerminalTabProps {
   isOnly: boolean
   isTruncated: boolean
   cwd: string | undefined
-  initialCwd: string
+  initialCwd?: string
   isEditing: boolean
   hasTabsToRight: boolean
   canCloseOthers: boolean
@@ -254,7 +254,7 @@ interface TerminalTabsProps {
   terminals: TerminalInstance[]
   activeTerminalId: string | null
   cwds: Record<string, string>
-  initialCwd: string
+  initialCwd?: string
   /** Background color for gradients - should match terminal background */
   terminalBg?: string
   onSelectTerminal: (id: string) => void

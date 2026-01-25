@@ -148,13 +148,26 @@ export const sessionFlowSubAgentsAtom = atom<SessionSubAgent[]>((get) => {
         const extractedOutput = part.output?.result || part.output?.output || part.result
         const extractedError = part.output?.error || part.error
 
+        // Ensure output is a string (convert objects to JSON for display)
+        const outputString = typeof extractedOutput === 'string'
+          ? extractedOutput
+          : extractedOutput
+            ? JSON.stringify(extractedOutput, null, 2)
+            : undefined
+
+        const errorString = typeof extractedError === 'string'
+          ? extractedError
+          : extractedError
+            ? JSON.stringify(extractedError, null, 2)
+            : undefined
+
         subAgents.push({
           agentId: part.toolCallId || `task-${msgId}-${partIdx}`,
           type: part.input?.subagent_type || "unknown-agent",
           description: part.input?.description || "Task",
           status,
-          output: extractedOutput,
-          error: extractedError,
+          output: outputString,
+          error: errorString,
           duration: part.output?.duration || part.output?.duration_ms,
           messageId: msgId,
           partIndex: partIdx,

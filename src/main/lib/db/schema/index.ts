@@ -148,6 +148,13 @@ export const claudeCodeSettings = sqliteTable("claude_code_settings", {
   // VPN connectivity check
   vpnCheckEnabled: integer("vpn_check_enabled", { mode: "boolean" }).notNull().default(false), // Enable/disable VPN status monitoring
   vpnCheckUrl: text("vpn_check_url"), // Internal URL to check for VPN connectivity (e.g., https://internal.company.com)
+
+  // AWS Bedrock model overrides (for Bedrock API)
+  bedrockOpusModel: text("bedrock_opus_model").default("global.anthropic.claude-opus-4-5-20251101-v1:0"),
+  bedrockSonnetModel: text("bedrock_sonnet_model").default("us.anthropic.claude-sonnet-4-5-20250929-v1:0[1m]"),
+  bedrockHaikuModel: text("bedrock_haiku_model").default("us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]"),
+  maxMcpOutputTokens: integer("max_mcp_output_tokens").notNull().default(200000),
+  maxThinkingTokens: integer("max_thinking_tokens").notNull().default(1000000),
 })
 
 // ============ MCP SERVER CREDENTIALS ============
