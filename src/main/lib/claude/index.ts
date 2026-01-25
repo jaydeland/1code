@@ -12,6 +12,7 @@ export {
   logClaudeEnv,
   getBundledClaudeBinaryPath,
 } from "./env"
+export { getActiveClaudeBinaryPath } from "./version-manager"
 export { TextDeltaBuffer } from "./text-delta-buffer"
 export { checkOfflineFallback } from "./offline-handler"
 export type { OfflineCheckResult, CustomClaudeConfig } from "./offline-handler"

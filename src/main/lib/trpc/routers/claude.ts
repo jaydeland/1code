@@ -9,7 +9,7 @@ import { z } from "zod"
 import {
   buildClaudeEnv,
   createTransformer,
-  getBundledClaudeBinaryPath,
+  getActiveClaudeBinaryPath,
   logClaudeEnv,
   logRawClaudeMessage,
   checkOfflineFallback,
@@ -843,8 +843,8 @@ export const claudeRouter = router({
               CLAUDE_CONFIG_DIR: isolatedConfigDir,
             }
 
-            // Get bundled Claude binary path
-            const claudeBinaryPath = getBundledClaudeBinaryPath()
+            // Get active Claude binary path (custom downloaded or bundled)
+            const claudeBinaryPath = getActiveClaudeBinaryPath()
 
             const resumeSessionId = input.sessionId || existingSessionId || undefined
 

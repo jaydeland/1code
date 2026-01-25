@@ -13,7 +13,8 @@
 import { app } from "electron"
 import * as path from "path"
 import * as os from "os"
-import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
+import { buildClaudeEnv } from "./env"
+import { getActiveClaudeBinaryPath } from "./version-manager"
 import { getDatabase, claudeCodeCredentials } from "../db"
 import { eq } from "drizzle-orm"
 import { safeStorage } from "electron"
@@ -153,7 +154,7 @@ export async function initBackgroundSession(
     }
 
     // Get bundled Claude binary path
-    const claudeBinaryPath = getBundledClaudeBinaryPath()
+    const claudeBinaryPath = getActiveClaudeBinaryPath()
 
     // Create abort controller for this session
     backgroundAbortController = new AbortController()
@@ -284,7 +285,7 @@ export async function queryBackgroundSession(
       }),
     }
 
-    const claudeBinaryPath = getBundledClaudeBinaryPath()
+    const claudeBinaryPath = getActiveClaudeBinaryPath()
     const model = options?.model || sessionState.model
 
     // Create new abort controller for this query
