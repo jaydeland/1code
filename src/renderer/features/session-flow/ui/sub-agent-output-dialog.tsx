@@ -87,7 +87,19 @@ export const SubAgentOutputDialog = memo(function SubAgentOutputDialog({
 
   // Compute display values (with fallbacks for when selectedAgent is null)
   const hasError = !!selectedAgent?.error
-  const content = selectedAgent?.error || selectedAgent?.output || "No output available"
+  const rawContent = selectedAgent?.error || selectedAgent?.output || "No output available"
+
+  // Try to parse and pretty-print JSON for better readability
+  const content = (() => {
+    try {
+      const parsed = JSON.parse(rawContent)
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      // Not JSON, return as-is
+      return rawContent
+    }
+  })()
+
   const duration = formatDuration(selectedAgent?.duration)
 
   // Always render Dialog to ensure it can open when state changes
@@ -100,7 +112,7 @@ export const SubAgentOutputDialog = memo(function SubAgentOutputDialog({
         setTimeout(() => setSelectedAgent(null), 200)
       }
     }}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+      <DialogContent className="max-w-6xl h-[85vh] flex flex-col">
         {selectedAgent && (
           <>
             <DialogHeader>
