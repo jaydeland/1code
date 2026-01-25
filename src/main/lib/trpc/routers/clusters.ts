@@ -308,25 +308,30 @@ export const clustersRouter = router({
   getPods: publicProcedure
     .input(z.object({ clusterName: z.string(), namespace: z.string() }))
     .query(async ({ input }): Promise<K8sPod[]> => {
-      const db = getDatabase()
-      const settings = db
-        .select()
-        .from(claudeCodeSettings)
-        .where(eq(claudeCodeSettings.id, "default"))
-        .get()
+      try {
+        const db = getDatabase()
+        const settings = db
+          .select()
+          .from(claudeCodeSettings)
+          .where(eq(claudeCodeSettings.id, "default"))
+          .get()
 
-      const region = settings?.bedrockRegion || "us-east-1"
-      const eksService = getEksService(region)
+        const region = settings?.bedrockRegion || "us-east-1"
+        const eksService = getEksService(region)
 
-      if (!eksService) {
-        throw new Error("No AWS credentials available")
+        if (!eksService) {
+          throw new Error("No AWS credentials available")
+        }
+
+        const cluster = await eksService.describeCluster(input.clusterName)
+        const token = await eksService.generateToken(input.clusterName)
+        const k8sClient = createK8sClient(cluster, token)
+
+        return await listPods(k8sClient, input.namespace)
+      } catch (error) {
+        console.error(`[clusters] Failed to list pods in namespace ${input.namespace}:`, error)
+        throw new Error(`Failed to list pods: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
-
-      const cluster = await eksService.describeCluster(input.clusterName)
-      const token = await eksService.generateToken(input.clusterName)
-      const k8sClient = createK8sClient(cluster, token)
-
-      return await listPods(k8sClient, input.namespace)
     }),
 
   /**
@@ -335,25 +340,30 @@ export const clustersRouter = router({
   getDeployments: publicProcedure
     .input(z.object({ clusterName: z.string(), namespace: z.string() }))
     .query(async ({ input }): Promise<K8sDeployment[]> => {
-      const db = getDatabase()
-      const settings = db
-        .select()
-        .from(claudeCodeSettings)
-        .where(eq(claudeCodeSettings.id, "default"))
-        .get()
+      try {
+        const db = getDatabase()
+        const settings = db
+          .select()
+          .from(claudeCodeSettings)
+          .where(eq(claudeCodeSettings.id, "default"))
+          .get()
 
-      const region = settings?.bedrockRegion || "us-east-1"
-      const eksService = getEksService(region)
+        const region = settings?.bedrockRegion || "us-east-1"
+        const eksService = getEksService(region)
 
-      if (!eksService) {
-        throw new Error("No AWS credentials available")
+        if (!eksService) {
+          throw new Error("No AWS credentials available")
+        }
+
+        const cluster = await eksService.describeCluster(input.clusterName)
+        const token = await eksService.generateToken(input.clusterName)
+        const k8sClient = createK8sClient(cluster, token)
+
+        return await listDeployments(k8sClient, input.namespace)
+      } catch (error) {
+        console.error(`[clusters] Failed to list deployments in namespace ${input.namespace}:`, error)
+        throw new Error(`Failed to list deployments: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
-
-      const cluster = await eksService.describeCluster(input.clusterName)
-      const token = await eksService.generateToken(input.clusterName)
-      const k8sClient = createK8sClient(cluster, token)
-
-      return await listDeployments(k8sClient, input.namespace)
     }),
 
   /**
@@ -362,25 +372,30 @@ export const clustersRouter = router({
   getServices: publicProcedure
     .input(z.object({ clusterName: z.string(), namespace: z.string() }))
     .query(async ({ input }): Promise<K8sService[]> => {
-      const db = getDatabase()
-      const settings = db
-        .select()
-        .from(claudeCodeSettings)
-        .where(eq(claudeCodeSettings.id, "default"))
-        .get()
+      try {
+        const db = getDatabase()
+        const settings = db
+          .select()
+          .from(claudeCodeSettings)
+          .where(eq(claudeCodeSettings.id, "default"))
+          .get()
 
-      const region = settings?.bedrockRegion || "us-east-1"
-      const eksService = getEksService(region)
+        const region = settings?.bedrockRegion || "us-east-1"
+        const eksService = getEksService(region)
 
-      if (!eksService) {
-        throw new Error("No AWS credentials available")
+        if (!eksService) {
+          throw new Error("No AWS credentials available")
+        }
+
+        const cluster = await eksService.describeCluster(input.clusterName)
+        const token = await eksService.generateToken(input.clusterName)
+        const k8sClient = createK8sClient(cluster, token)
+
+        return await listServices(k8sClient, input.namespace)
+      } catch (error) {
+        console.error(`[clusters] Failed to list services in namespace ${input.namespace}:`, error)
+        throw new Error(`Failed to list services: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
-
-      const cluster = await eksService.describeCluster(input.clusterName)
-      const token = await eksService.generateToken(input.clusterName)
-      const k8sClient = createK8sClient(cluster, token)
-
-      return await listServices(k8sClient, input.namespace)
     }),
 
   /**

@@ -72,6 +72,8 @@ export function DashboardTab() {
   const {
     data: pods,
     isLoading: podsLoading,
+    error: podsError,
+    isError: podsIsError,
     refetch: refetchPods,
     isRefetching: podsRefetching,
   } = trpc.clusters.getPods.useQuery(
@@ -83,6 +85,8 @@ export function DashboardTab() {
   const {
     data: deployments,
     isLoading: deploymentsLoading,
+    error: deploymentsError,
+    isError: deploymentsIsError,
     refetch: refetchDeployments,
     isRefetching: deploymentsRefetching,
   } = trpc.clusters.getDeployments.useQuery(
@@ -94,6 +98,8 @@ export function DashboardTab() {
   const {
     data: services,
     isLoading: servicesLoading,
+    error: servicesError,
+    isError: servicesIsError,
     refetch: refetchServices,
     isRefetching: servicesRefetching,
   } = trpc.clusters.getServices.useQuery(
@@ -160,9 +166,9 @@ export function DashboardTab() {
         <StatCard
           title="Pods"
           icon={Box}
-          value={`${stats.pods.running}/${stats.pods.total}`}
-          subtitle="pods running"
-          status={getStatusFromRatio(stats.pods.running, stats.pods.total)}
+          value={podsIsError ? "Error" : `${stats.pods.running}/${stats.pods.total}`}
+          subtitle={podsIsError ? "failed to load" : "pods running"}
+          status={podsIsError ? "critical" : getStatusFromRatio(stats.pods.running, stats.pods.total)}
         />
         <StatCard
           title="Nodes"
@@ -174,16 +180,16 @@ export function DashboardTab() {
         <StatCard
           title="Deployments"
           icon={Rocket}
-          value={`${stats.deployments.healthy}/${stats.deployments.total}`}
-          subtitle="deployments healthy"
-          status={getStatusFromRatio(stats.deployments.healthy, stats.deployments.total)}
+          value={deploymentsIsError ? "Error" : `${stats.deployments.healthy}/${stats.deployments.total}`}
+          subtitle={deploymentsIsError ? "failed to load" : "deployments healthy"}
+          status={deploymentsIsError ? "critical" : getStatusFromRatio(stats.deployments.healthy, stats.deployments.total)}
         />
         <StatCard
           title="Services"
           icon={Network}
-          value={stats.services.total}
-          subtitle="services active"
-          status="neutral"
+          value={servicesIsError ? "Error" : stats.services.total}
+          subtitle={servicesIsError ? "failed to load" : "services active"}
+          status={servicesIsError ? "critical" : "neutral"}
         />
       </div>
 
@@ -223,6 +229,16 @@ export function DashboardTab() {
           {deploymentsLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : deploymentsIsError ? (
+            <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-sm">
+              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-red-500">Failed to load deployments</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {deploymentsError?.message || "Unknown error"}
+                </p>
+              </div>
             </div>
           ) : deployments && deployments.length > 0 ? (
             <div className="space-y-2">
@@ -295,6 +311,16 @@ export function DashboardTab() {
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
+          ) : servicesIsError ? (
+            <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-sm">
+              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-red-500">Failed to load services</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {servicesError?.message || "Unknown error"}
+                </p>
+              </div>
+            </div>
           ) : services && services.length > 0 ? (
             <div className="space-y-2">
               {services.map((svc) => (
@@ -346,6 +372,16 @@ export function DashboardTab() {
           {podsLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : podsIsError ? (
+            <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-sm">
+              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-red-500">Failed to load pods</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {podsError?.message || "Unknown error"}
+                </p>
+              </div>
             </div>
           ) : pods && pods.length > 0 ? (
             <div className="space-y-2">
