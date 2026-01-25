@@ -175,6 +175,16 @@ export const configSources = sqliteTable("config_sources", {
   ),
 })
 
+// ============ APP SETTINGS ============
+// Stores application-level settings and migration tracking
+export const appSettings = sqliteTable("app_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  lastMigrationVersion: text("last_migration_version"), // Tracks last applied migration version (for data migrations)
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -190,3 +200,5 @@ export type McpCredential = typeof mcpCredentials.$inferSelect
 export type NewMcpCredential = typeof mcpCredentials.$inferInsert
 export type ConfigSource = typeof configSources.$inferSelect
 export type NewConfigSource = typeof configSources.$inferInsert
+export type AppSettings = typeof appSettings.$inferSelect
+export type NewAppSettings = typeof appSettings.$inferInsert

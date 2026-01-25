@@ -104,6 +104,13 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
 
   // Create a new terminal and open the sidebar
   const createTerminal = useCallback(() => {
+    console.log("[TerminalTabContent] createTerminal called", {
+      terminalContextId,
+      existingTerminals: terminals.length,
+      selectedChatId,
+      defaultCwd,
+    })
+
     const id = generateTerminalId()
     const paneId = generatePaneId(terminalContextId, id)
     const name = getNextTerminalName(terminals)
@@ -115,20 +122,31 @@ export function TerminalTabContent({ className }: TerminalTabContentProps) {
       createdAt: Date.now(),
     }
 
-    setAllTerminals((prev) => ({
-      ...prev,
-      [terminalContextId]: [...(prev[terminalContextId] || []), newTerminal],
-    }))
+    console.log("[TerminalTabContent] Creating terminal:", newTerminal)
+
+    setAllTerminals((prev) => {
+      const updated = {
+        ...prev,
+        [terminalContextId]: [...(prev[terminalContextId] || []), newTerminal],
+      }
+      console.log("[TerminalTabContent] Updated terminals:", updated)
+      return updated
+    })
 
     // Set as active
-    setAllActiveIds((prev) => ({
-      ...prev,
-      [terminalContextId]: id,
-    }))
+    setAllActiveIds((prev) => {
+      const updated = {
+        ...prev,
+        [terminalContextId]: id,
+      }
+      console.log("[TerminalTabContent] Updated active IDs:", updated)
+      return updated
+    })
 
     // Open the terminal sidebar when creating a new terminal
+    console.log("[TerminalTabContent] Opening terminal sidebar")
     setTerminalSidebarOpen(true)
-  }, [terminalContextId, terminals, setAllTerminals, setAllActiveIds, setTerminalSidebarOpen])
+  }, [terminalContextId, terminals, selectedChatId, defaultCwd, setAllTerminals, setAllActiveIds, setTerminalSidebarOpen])
 
   // Select a terminal and open the sidebar
   const selectTerminal = useCallback(

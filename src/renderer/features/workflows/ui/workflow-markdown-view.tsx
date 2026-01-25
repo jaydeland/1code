@@ -145,41 +145,46 @@ export function WorkflowMarkdownView() {
   // Combine all diagnostics
   const allDiagnostics = useMemo(() => {
     const diagnostics: LintDiagnostic[] = []
+    // Map to track diagnostics by key for merging fix properties
+    const diagnosticsByKey = new Map<string, LintDiagnostic>()
 
-    // Add backend validation errors
+    // Add backend validation errors first
     for (const error of validationErrors) {
-      diagnostics.push({
+      const diagnostic: LintDiagnostic = {
         severity: error.severity,
         field: error.field,
         message: error.message,
-      })
+      }
+      const key = `${diagnostic.field}:${diagnostic.message}`
+      diagnostics.push(diagnostic)
+      diagnosticsByKey.set(key, diagnostic)
     }
 
-    // Add client-side lint results (deduped)
+    // Add client-side lint results (deduped, but merge fix properties)
     if (lintResult) {
-      const existingMessages = new Set(diagnostics.map(d => `${d.field}:${d.message}`))
+      const allLintDiagnostics = [
+        ...lintResult.errors,
+        ...lintResult.warnings,
+        ...lintResult.info,
+      ]
 
-      for (const error of lintResult.errors) {
-        const key = `${error.field}:${error.message}`
-        if (!existingMessages.has(key)) {
-          diagnostics.push(error)
-          existingMessages.add(key)
-        }
-      }
+      for (const lintDiag of allLintDiagnostics) {
+        const key = `${lintDiag.field}:${lintDiag.message}`
+        const existing = diagnosticsByKey.get(key)
 
-      for (const warning of lintResult.warnings) {
-        const key = `${warning.field}:${warning.message}`
-        if (!existingMessages.has(key)) {
-          diagnostics.push(warning)
-          existingMessages.add(key)
-        }
-      }
-
-      for (const info of lintResult.info) {
-        const key = `${info.field}:${info.message}`
-        if (!existingMessages.has(key)) {
-          diagnostics.push(info)
-          existingMessages.add(key)
+        if (existing) {
+          // Merge fix properties onto existing diagnostic
+          if (lintDiag.fixable && lintDiag.fix) {
+            existing.fixable = lintDiag.fixable
+            existing.fix = lintDiag.fix
+          }
+          if (lintDiag.suggestion && !existing.suggestion) {
+            existing.suggestion = lintDiag.suggestion
+          }
+        } else {
+          // Add new diagnostic
+          diagnostics.push(lintDiag)
+          diagnosticsByKey.set(key, lintDiag)
         }
       }
     }

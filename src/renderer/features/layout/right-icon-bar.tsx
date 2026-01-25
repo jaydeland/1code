@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo } from "react"
+import React, { useMemo, useEffect } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import { GitBranch, ListTree } from "lucide-react"
 import {
@@ -13,6 +13,7 @@ import { cn } from "../../lib/utils"
 import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily } from "../agents/atoms"
 import { sessionFlowSidebarOpenAtom } from "../session-flow/atoms"
 import { workflowPanelOpenAtom } from "../workflows/atoms"
+import { trpc } from "../../lib/trpc"
 
 interface RightIconBarProps {
   className?: string
@@ -20,6 +21,15 @@ interface RightIconBarProps {
 
 export function RightIconBar({ className }: RightIconBarProps) {
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+
+  // Query current chat data to check for worktree
+  const { data: chatData } = trpc.chats.get.useQuery(
+    { id: selectedChatId! },
+    { enabled: !!selectedChatId }
+  )
+
+  // Determine if this is a worktree-based chat
+  const isWorktreeMode = !!chatData?.branch
 
   // Diff sidebar state - per chat
   const diffSidebarAtom = useMemo(
@@ -33,6 +43,18 @@ export function RightIconBar({ className }: RightIconBarProps) {
 
   // Workflow panel state - global (for mutual exclusivity with Session Flow)
   const [workflowPanelOpen, setWorkflowPanelOpen] = useAtom(workflowPanelOpenAtom)
+
+  // Auto-close panels when switching away from worktree mode
+  useEffect(() => {
+    if (!isWorktreeMode) {
+      if (isDiffOpen) {
+        setIsDiffOpen(false)
+      }
+      if (isSessionFlowOpen) {
+        setIsSessionFlowOpen(false)
+      }
+    }
+  }, [isWorktreeMode, isDiffOpen, isSessionFlowOpen, setIsDiffOpen, setIsSessionFlowOpen])
 
   const handleChangesClick = () => {
     if (!selectedChatId) return
@@ -64,53 +86,58 @@ export function RightIconBar({ className }: RightIconBarProps) {
         className,
       )}
     >
-      {/* Changes/Diff Button */}
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={handleChangesClick}
-            disabled={!selectedChatId}
-            className={cn(
-              "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-              isDiffOpen && selectedChatId
-                ? "bg-foreground/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-              !selectedChatId && "opacity-50 cursor-not-allowed",
-            )}
-            aria-label="Changes"
-            aria-pressed={isDiffOpen}
-          >
-            <GitBranch className="h-4 w-4 flex-shrink-0" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">
-          {selectedChatId ? "Changes" : "Select a workspace to view changes"}
-        </TooltipContent>
-      </Tooltip>
+      {/* Only show Changes and Session Flow for worktree-based chats */}
+      {isWorktreeMode && (
+        <>
+          {/* Changes/Diff Button */}
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleChangesClick}
+                disabled={!selectedChatId}
+                className={cn(
+                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
+                  isDiffOpen && selectedChatId
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                  !selectedChatId && "opacity-50 cursor-not-allowed",
+                )}
+                aria-label="Changes"
+                aria-pressed={isDiffOpen}
+              >
+                <GitBranch className="h-4 w-4 flex-shrink-0" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              {selectedChatId ? "Changes" : "Select a workspace to view changes"}
+            </TooltipContent>
+          </Tooltip>
 
-      {/* Session Flow Button */}
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={handleSessionFlowClick}
-            className={cn(
-              "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-              isSessionFlowOpen
-                ? "bg-foreground/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-            )}
-            aria-label="Session Flow"
-            aria-pressed={isSessionFlowOpen}
-          >
-            <ListTree className="h-4 w-4 flex-shrink-0" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">
-          Session Flow
-        </TooltipContent>
-      </Tooltip>
+          {/* Session Flow Button */}
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleSessionFlowClick}
+                className={cn(
+                  "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
+                  isSessionFlowOpen
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                )}
+                aria-label="Session Flow"
+                aria-pressed={isSessionFlowOpen}
+              >
+                <ListTree className="h-4 w-4 flex-shrink-0" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              Session Flow
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />

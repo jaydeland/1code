@@ -1,7 +1,9 @@
 "use client"
 
 import { trpc } from "../../../lib/trpc"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useAtomValue } from "jotai"
+import { selectedProjectAtom } from "../../../lib/atoms"
 import { Button } from "../../ui/button"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -85,10 +87,26 @@ function TypeBadge({ type }: { type: string }) {
 }
 
 export function AgentsAdvancedSettingsTab() {
+  // Get selected project for default worktree path preview
+  const selectedProject = useAtomValue(selectedProjectAtom)
+
   // Path settings state
   const [customConfigDir, setCustomConfigDir] = useState("")
   const [customWorktreeLocation, setCustomWorktreeLocation] = useState("")
   const [worktreeLocationError, setWorktreeLocationError] = useState<string | null>(null)
+
+  // Compute example default worktree path for the selected project
+  const computedDefaultWorktreePath = useMemo(() => {
+    if (!selectedProject?.path) return null
+
+    // Mimic backend logic: <parent>/wt-<projectname>-<number>
+    const pathParts = selectedProject.path.split("/")
+    const projectName = pathParts[pathParts.length - 1]
+    const parentPath = pathParts.slice(0, -1).join("/")
+
+    // Show with -1 as example (actual number determined at creation time)
+    return `${parentPath}/wt-${projectName}-1`
+  }, [selectedProject])
 
   // View modal state
   const [viewMcpConfigId, setViewMcpConfigId] = useState<string | null>(null)
@@ -565,7 +583,11 @@ export function AgentsAdvancedSettingsTab() {
                   setCustomWorktreeLocation(newValue)
                   setWorktreeLocationError(validateWorktreePath(newValue))
                 }}
-                placeholder="sibling directory wt-{name}-{n} (default)"
+                placeholder={
+                  computedDefaultWorktreePath
+                    ? computedDefaultWorktreePath
+                    : "sibling directory wt-{name}-{n}"
+                }
                 className={cn(
                   "font-mono text-xs",
                   worktreeLocationError && "border-red-500"
@@ -574,12 +596,21 @@ export function AgentsAdvancedSettingsTab() {
               {worktreeLocationError && (
                 <p className="text-xs text-red-500">{worktreeLocationError}</p>
               )}
+              {computedDefaultWorktreePath && !customWorktreeLocation && (
+                <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-lg border border-border">
+                  <Info className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Default for <span className="font-medium">{selectedProject?.name}</span>:{" "}
+                    <code className="text-xs">{computedDefaultWorktreePath}</code>
+                  </p>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 Custom location for git worktrees. Supports environment variables like $HOME, $VIDYARD_PATH, or ~.
-                Leave empty to use default (sibling directory: <code className="text-xs">wt-&lt;projectname&gt;-&lt;number&gt;</code>).
+                Leave empty to use default sibling directory pattern: <code className="text-xs">wt-&lt;projectname&gt;-&lt;number&gt;</code>
               </p>
               <p className="text-xs text-muted-foreground">
-                Examples: <code className="text-xs">~/my-worktrees</code>, <code className="text-xs">$VIDYARD_PATH/.worktrees</code>
+                Custom examples: <code className="text-xs">~/my-worktrees</code>, <code className="text-xs">$VIDYARD_PATH/.worktrees</code>
               </p>
             </div>
           </div>

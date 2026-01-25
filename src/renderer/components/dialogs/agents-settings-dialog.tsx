@@ -2,7 +2,7 @@ import { useAtom } from "jotai"
 import { useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { FolderOpen } from "lucide-react"
+import { FolderOpen, Server } from "lucide-react"
 import { DialogIcons, DialogIconSizes } from "../../lib/dialog-icons"
 import { cn } from "../../lib/utils"
 import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../lib/atoms"
@@ -20,6 +20,7 @@ import { AgentsKeyboardTab } from "./settings-tabs/agents-keyboard-tab"
 import { AgentsDebugTab } from "./settings-tabs/agents-debug-tab"
 import { AgentsModelsTab } from "./settings-tabs/agents-models-tab"
 import { AgentsBetaTab } from "./settings-tabs/agents-beta-tab"
+import { AgentsKubernetesTab } from "./settings-tabs/agents-kubernetes-tab"
 import { AgentsProjectWorktreeTab } from "./settings-tabs/agents-project-worktree-tab"
 import { AgentsAdvancedSettingsTab } from "./settings-tabs/agents-advanced-settings-tab"
 import { AgentsWorktreesTab } from "./settings-tabs/agents-worktrees-tab"
@@ -88,6 +89,12 @@ const MAIN_TABS = [
     label: "Models",
     icon: BrainFilledIcon,
     description: "Model overrides",
+  },
+  {
+    id: "kubernetes" as SettingsTab,
+    label: "Kubernetes",
+    icon: Server,
+    description: "Kubernetes cluster configuration",
   },
 ]
 
@@ -298,6 +305,8 @@ export function AgentsSettingsDialog({
         return <AgentsPreferencesTab />
       case "models":
         return <AgentsModelsTab />
+      case "kubernetes":
+        return <AgentsKubernetesTab />
       case "advanced":
         return <AgentsAdvancedSettingsTab />
       case "worktrees":

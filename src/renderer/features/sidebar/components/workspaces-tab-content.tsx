@@ -25,6 +25,9 @@ import {
   expandedWorkspaceIdsAtom,
   selectedDraftIdAtom,
 } from "../../agents/atoms"
+import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
+import { selectedMcpCategoryAtom } from "../../mcp/atoms"
+import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +47,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useAtom(expandedWorkspaceIdsAtom)
+  const setSelectedWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
+  const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
+  const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
 
   // Fetch all projects
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
@@ -112,7 +118,14 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     }
     setSelectedChatId(chat.id)
     setSelectedDraftId(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId])
+
+    // Clear workflow view to show chat
+    setSelectedWorkflowCategory(null)
+    // Clear MCP category when chat is selected
+    setSelectedMcpCategory(null)
+    // Clear clusters category when chat is selected
+    setSelectedClustersCategory(null)
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory])
 
   // Handle workspace click
   const handleWorkspaceClick = useCallback((workspace: any) => {
@@ -129,7 +142,14 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     }
     setSelectedChatId(null)
     setSelectedDraftId(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId])
+
+    // Clear workflow view to show new chat form
+    setSelectedWorkflowCategory(null)
+    // Clear MCP category when creating new chat
+    setSelectedMcpCategory(null)
+    // Clear clusters category when creating new chat
+    setSelectedClustersCategory(null)
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory])
 
   // Group chats by project and filter by search
   const workspacesWithChats = useMemo(() => {

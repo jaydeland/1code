@@ -296,7 +296,11 @@ export function transformMessagesToFlow(
             state: bashState,
             count: bashCount,
             isExpanded,
-            onClick: () => options.onNodeClick(message.id, bashFirstPartIndex),
+            // For single invocation: navigate directly. For multiple: no onClick (handled by onToggleExpansion)
+            onClick: bashCount === 1
+              ? () => options.onNodeClick(message.id, bashFirstPartIndex)
+              : undefined,
+            // For multiple invocations: provide expansion toggle
             onToggleExpansion: bashCount > 1 && options.onToggleExpansion
               ? () => {
                   console.log("[message-transformer] onToggleExpansion called for:", toolNodeId)
@@ -404,7 +408,11 @@ export function transformMessagesToFlow(
             state: thinkingState,
             count: thinkingCount,
             isExpanded,
-            onClick: () => options.onNodeClick(message.id, thinkingFirstPartIndex),
+            // For single invocation: navigate directly. For multiple: no onClick (handled by onToggleExpansion)
+            onClick: thinkingCount === 1
+              ? () => options.onNodeClick(message.id, thinkingFirstPartIndex)
+              : undefined,
+            // For multiple invocations: provide expansion toggle
             onToggleExpansion: thinkingCount > 1 && options.onToggleExpansion
               ? () => {
                   console.log("[message-transformer] onToggleExpansion called for:", toolNodeId)

@@ -175,6 +175,7 @@ export type SettingsTab =
   | "keyboard"
   | "preferences"
   | "models"
+  | "kubernetes"
   | "advanced"
   | "worktrees"
   | "beta"

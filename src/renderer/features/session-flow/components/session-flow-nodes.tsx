@@ -70,8 +70,8 @@ export interface ToolCallNodeData {
   output?: any // Tool output/result
   error?: string // Error message if failed
   duration?: number // Execution duration in ms
-  onClick: () => void
-  onToggleExpansion?: () => void // Separate handler for expansion toggle
+  onClick?: () => void // Optional - only for single invocations or detail nodes
+  onToggleExpansion?: () => void // Optional - only for multi-invocation parent nodes
 }
 
 export interface AgentSpawnNodeData {
@@ -206,10 +206,23 @@ export const ToolCallNode = memo(function ToolCallNode({
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      // Node body click always navigates to message
-      data.onClick()
+      e.stopPropagation()
+
+      if (hasMultipleInvocations) {
+        // Multi-invocation: toggle expansion (NO navigation)
+        if (data.onToggleExpansion) {
+          console.log("[ToolCallNode] Parent node clicked - toggling expansion")
+          data.onToggleExpansion()
+        }
+      } else {
+        // Single invocation: navigate
+        if (data.onClick) {
+          console.log("[ToolCallNode] Single invocation node clicked - navigating")
+          data.onClick()
+        }
+      }
     },
-    [data]
+    [data, hasMultipleInvocations]
   )
 
   const handleChevronClick = useCallback(
@@ -327,7 +340,9 @@ export const ToolCallNode = memo(function ToolCallNode({
             </div>
           )}
           <div className="text-[10px] text-muted-foreground mt-1 italic">
-            Click to navigate to tool call
+            {hasMultipleInvocations
+              ? "Click to expand/collapse invocations"
+              : "Click to navigate to tool call"}
           </div>
         </div>
       </TooltipContent>
