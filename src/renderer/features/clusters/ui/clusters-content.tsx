@@ -1,6 +1,5 @@
 "use client"
 
-import React from "react"
 import { Server } from "lucide-react"
 import { trpc } from "../../../lib/trpc"
 import { ClusterDetail } from "./cluster-detail"
@@ -24,7 +23,7 @@ export function ClustersContent() {
       </div>
 
       {/* Detail view - list is already in left sidebar */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         <ClusterDetail />
       </div>
     </div>
