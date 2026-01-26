@@ -1,0 +1,61 @@
+"use client"
+
+import { useEffect } from "react"
+import { useAtomValue, useSetAtom } from "jotai"
+import { selectedWorkflowNodeAtom, workflowViewModeAtom } from "../atoms"
+import { WorkflowDetailHeader } from "./workflow-detail-header"
+import { WorkflowMarkdownView } from "./workflow-markdown-view"
+import { WorkflowReactFlowView } from "./workflow-reactflow-view"
+import { WorkflowMcpView } from "./workflow-mcp-view"
+import { WorkflowReviewView } from "./workflow-review-view"
+
+/**
+ * Detail panel for viewing workflow file content
+ * Shows markdown view, flowchart view, or AI review based on toggle
+ */
+export function WorkflowDetail() {
+  const selectedNode = useAtomValue(selectedWorkflowNodeAtom)
+  const viewMode = useAtomValue(workflowViewModeAtom)
+  const setViewMode = useSetAtom(workflowViewModeAtom)
+
+  // Always reset to markdown view when a new file is selected
+  useEffect(() => {
+    if (selectedNode) {
+      console.log("[workflow-detail] selectedNode:", selectedNode)
+      setViewMode("markdown")
+    }
+  }, [selectedNode?.id, setViewMode])
+
+  if (!selectedNode) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Select a file to view details
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // MCPs have custom view (no markdown files)
+  if (selectedNode.type === "mcpServer") {
+    return (
+      <div className="flex flex-col h-full">
+        <WorkflowDetailHeader />
+        <WorkflowMcpView />
+      </div>
+    )
+  }
+
+  // Agents, Commands, Skills show markdown, flowchart, or review
+  return (
+    <div className="flex flex-col h-full">
+      <WorkflowDetailHeader />
+
+      {viewMode === "markdown" && <WorkflowMarkdownView />}
+      {viewMode === "flowchart" && <WorkflowReactFlowView />}
+      {viewMode === "review" && <WorkflowReviewView />}
+    </div>
+  )
+}
