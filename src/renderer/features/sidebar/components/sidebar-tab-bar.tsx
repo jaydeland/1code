@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import {
   MessageSquare,
   Terminal,
@@ -22,6 +22,9 @@ import {
 } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
 import { selectedSidebarTabAtom, sidebarContentCollapsedAtom, type SidebarTab } from "../../agents/atoms"
+import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
+import { selectedClustersCategoryAtom } from "../../clusters/atoms"
+import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 
 interface TabItem {
   id: SidebarTab
@@ -49,6 +52,11 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const [selectedTab, setSelectedTab] = useAtom(selectedSidebarTabAtom)
   const [isContentCollapsed, setIsContentCollapsed] = useAtom(sidebarContentCollapsedAtom)
 
+  // Category atoms that control main content view - need to clear when switching tabs
+  const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
+  const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
+  const setMcpCategory = useSetAtom(selectedMcpCategoryAtom)
+
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
       // Clicking same tab toggles collapse
@@ -57,6 +65,12 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       // Clicking different tab switches and expands
       setSelectedTab(tabId)
       setIsContentCollapsed(false)
+
+      // Clear all category atoms to ensure correct main content view renders
+      // These atoms control which view is shown in AgentsContent
+      setWorkflowCategory(null)
+      setClustersCategory(null)
+      setMcpCategory(null)
     }
   }
 
