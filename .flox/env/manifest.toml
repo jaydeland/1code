@@ -12,10 +12,8 @@ version = 1
 ## Include ----------------------------------------------------------
 ## ... environments to create a composed environment
 ## ------------------------------------------------------------------
-[include]
-environments = [
-  { dir = "./devyard" },
-]
+# [include]
+# environments = []
 
 
 ## Install Packages --------------------------------------------------
@@ -31,9 +29,10 @@ electron.pkg-path = "electron"
 electron.version = "~33.0"
 electron.pkg-group = "electron-group"
 # Python 3.11 for node-gyp (has distutils built-in)
-# Overrides Python 3.13 from devyard environment
 python311.pkg-path = "python311"
 python311.priority = 10
+# TypeScript language server for LSP support
+typescript-language-server.pkg-path = "nodePackages.typescript-language-server"
 
 
 ## Environment Variables ---------------------------------------------
@@ -76,7 +75,7 @@ common = '''
   echo "✓ Claw development environment activated"
   echo "  Bun: $(bun --version)"
   echo "  Electron: $(electron --version)"
-  echo "  TypeScript LSP: $(which typescript-language-server) (via devyard)"
+  echo "  TypeScript LSP: $(which typescript-language-server)"
 '''
 ## Shell-specific customizations such as setting aliases go here:
 # bash = ...
@@ -111,12 +110,11 @@ common = '''
 ## Other Environment Options -----------------------------------------
 [options]
 # Systems that environment is compatible with
-# Commented out to inherit from devyard environment automatically
-# systems = [
-#   "aarch64-darwin",
-#   "aarch64-linux",
-#   "x86_64-darwin",
-#   "x86_64-linux",
-# ]
+systems = [
+  "aarch64-darwin",
+  "aarch64-linux",
+  "x86_64-darwin",
+  "x86_64-linux",
+]
 # Uncomment to disable CUDA detection.
 # cuda-detection = false

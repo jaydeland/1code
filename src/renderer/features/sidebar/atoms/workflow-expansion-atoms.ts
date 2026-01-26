@@ -25,7 +25,7 @@ const setStorage = {
 
 /**
  * Track expanded workflow groups in agents tab
- * Stores namespace keys (e.g., "gsd", "vidyard")
+ * Stores namespace keys (e.g., "gsd", "company")
  */
 export const agentsExpansionAtom = atomWithStorage<Set<string>>(
   "sidebar:agents-expansion",
@@ -36,7 +36,7 @@ export const agentsExpansionAtom = atomWithStorage<Set<string>>(
 
 /**
  * Track expanded workflow groups in commands tab
- * Stores namespace keys (e.g., "gsd", "vidyard")
+ * Stores namespace keys (e.g., "gsd", "company")
  */
 export const commandsExpansionAtom = atomWithStorage<Set<string>>(
   "sidebar:commands-expansion",
@@ -47,7 +47,7 @@ export const commandsExpansionAtom = atomWithStorage<Set<string>>(
 
 /**
  * Track expanded workflow groups in skills tab
- * Stores namespace keys (e.g., "gsd", "vidyard")
+ * Stores namespace keys (e.g., "gsd", "company")
  */
 export const skillsExpansionAtom = atomWithStorage<Set<string>>(
   "sidebar:skills-expansion",

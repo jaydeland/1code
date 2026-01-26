@@ -58,14 +58,13 @@ Claude asks clarifying questions, builds structured plans, and shows clean markd
 ### Prerequisites
 
 - **Flox** - For reproducible development environment ([install instructions](https://flox.dev/docs))
-- **Devyard environment** - Claw inherits TypeScript tooling from the devyard Flox environment (must be accessible via symlink at `./devyard`)
-- **Python 3** - For native module compilation (inherited from devyard)
+- **Python 3** - For native module compilation
 - **Xcode Command Line Tools** (macOS) - Run `xcode-select --install`
 
 ### Build from source
 
 ```bash
-# 1. Activate Flox environment (manages bun, electron, inherits from devyard)
+# 1. Activate Flox environment (manages bun, electron, TypeScript LSP)
 cd /path/to/claw
 flox activate
 
@@ -80,7 +79,7 @@ bun run build
 bun run package:mac  # or package:win, package:linux
 ```
 
-> **Important:** The Flox environment provides bun, electron, and inherits TypeScript LSP from devyard. The `claude:download` step downloads the Claude CLI binary which is required for agent chat functionality.
+> **Important:** The Flox environment provides bun, electron, and TypeScript LSP. The `claude:download` step downloads the Claude CLI binary which is required for agent chat functionality.
 
 ## Development
 

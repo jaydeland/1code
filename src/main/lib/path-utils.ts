@@ -5,9 +5,9 @@ import * as os from "os"
  * Supports: $VAR, ${VAR}, and ~ for home directory
  *
  * Examples:
- *   "$HOME/.worktrees" → "/Users/jdeland/.worktrees"
- *   "${VIDYARD_PATH}/worktrees" → "/Users/jdeland/dev/vidyard/worktrees"
- *   "~/my-worktrees" → "/Users/jdeland/my-worktrees"
+ *   "$HOME/.worktrees" → "/Users/username/.worktrees"
+ *   "${PROJECTS}/worktrees" → "/Users/username/projects/worktrees"
+ *   "~/my-worktrees" → "/Users/username/my-worktrees"
  *   "/absolute/path" → "/absolute/path" (unchanged)
  *
  * @param path - Path string that may contain environment variables

@@ -8,12 +8,11 @@ This document describes the design and implementation plan for adding comprehens
 
 ### Existing Authentication Modes
 
-The app currently supports four authentication modes defined in `claudeCodeSettings.authMode`:
+The app currently supports three authentication modes defined in `claudeCodeSettings.authMode`:
 
 1. **OAuth** - Claude Code OAuth flow (default)
 2. **AWS Bedrock** - Basic region-only configuration
 3. **API Key** - Direct Anthropic API key
-4. **Devyard** - Vidyard internal development environment
 
 ### Current AWS Bedrock Implementation (Limited)
 
@@ -265,9 +264,9 @@ The AWS Bedrock section in settings will be expanded:
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Authentication Mode                                          │
-│ ┌─────────┐ ┌───────────────┐ ┌──────────┐ ┌──────────────┐ │
-│ │  OAuth  │ │ AWS Bedrock   │ │ API Key  │ │   Devyard    │ │
-│ └─────────┘ └───────────────┘ └──────────┘ └──────────────┘ │
+│ ┌─────────┐ ┌───────────────┐ ┌──────────┐                  │
+│ │  OAuth  │ │ AWS Bedrock   │ │ API Key  │                  │
+│ └─────────┘ └───────────────┘ └──────────┘                  │
 └──────────────────────────────────────────────────────────────┘
 
 When "AWS Bedrock" is selected:
@@ -618,7 +617,7 @@ Users need these IAM permissions for Bedrock:
    - Internal testing only
 
 2. **Beta Release**
-   - Enable for Devyard users
+   - Enable for internal users
    - Collect feedback
 
 3. **GA Release**

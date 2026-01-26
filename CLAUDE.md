@@ -35,9 +35,7 @@ curl http://localhost:9223/json
 
 **Configure electron-mcp-server:**
 
-Add to your MCP config file:
-- **Devyard mode:** `$VIDYARD_PATH/devyard/claude/mcp.json`
-- **Standard mode:** `~/.claude/mcp.json`
+Add to your MCP config file (`~/.claude/mcp.json`):
 
 ```json
 {
@@ -63,23 +61,7 @@ Add to your MCP config file:
 
 ## Development Environment
 
-This project uses **Flox** for reproducible development environments. The claw environment inherits from the devyard environment (TypeScript tooling, Node.js, Python, etc.) and adds app-specific dependencies (bun, electron).
-
-### Inheritance Pattern
-
-```
-devyard/.flox/env/manifest.toml
-  ├─ TypeScript language server
-  ├─ Node.js, Python, etc.
-  └─ Claude Code LSP integration
-
-claw/.flox/env/manifest.toml
-  ├─ [include] → devyard (via symlink)
-  ├─ bun (package manager)
-  └─ electron (desktop framework)
-```
-
-This follows the same pattern as the avatar project. TypeScript LSP is available via inheritance.
+This project uses **Flox** for reproducible development environments. The Flox environment provides bun, electron, and TypeScript tooling.
 
 ### First-time Setup
 
@@ -87,8 +69,8 @@ This follows the same pattern as the avatar project. TypeScript LSP is available
 # Install Flox (if not already installed)
 curl -fsSL https://install.flox.dev | bash
 
-# Activate the Claw environment (inherits from devyard)
-cd /Users/jdeland/claw
+# Activate the Claw environment
+cd /path/to/claw
 flox activate
 ```
 
@@ -104,54 +86,12 @@ bun run dev
 ```
 
 **Key points:**
-- Flox manages: bun runtime, electron binary
-- Inherited from devyard: TypeScript LSP, Node.js, Python, kubectl, etc.
+- Flox manages: bun runtime, electron binary, TypeScript LSP
 - package.json manages: React, Electron libraries, UI components, all npm packages
 - Run `flox activate` once per terminal session (or use direnv for auto-activation)
 - The environment sets `ELECTRON_SKIP_BINARY_DOWNLOAD=1` to prevent duplicate electron binaries
 
 **Without Flox:** The app will try to use system-installed bun/electron, which may have version mismatches. Always activate Flox before development.
-
-## Devyard Integration
-
-The app automatically detects and integrates with Vidyard's Devyard development environment when available. This provides AWS and Kubernetes configuration for Claude agents and terminals.
-
-**Authentication Method:**
-- Available as "Devyard" option in the authentication selector (onboarding and settings)
-- Shows automatically when `$VIDYARD_PATH` environment variable is set
-- Disabled if Devyard is not detected
-
-**Detection:**
-- Checks for `$VIDYARD_PATH/devyard` directory
-- If found, automatically loads AWS/Kubernetes configuration
-
-**Loaded Environment Variables:**
-- `KUBECONFIG` - Points to `.kube.config` in devyard
-- `AWS_PROFILE_OPERATIONS` - Operations account profile (SSO-Operations-075505783641)
-- `AWS_PROFILE_STAGING` - Staging account profile (SSO-Staging-075505783641)
-- `AWS_REGION` - Default region (us-east-1)
-- `AWS_STAGING_CLUSTER` - EKS staging cluster ARN
-- `AWS_SHARED_CREDENTIALS_FILE` - Points to `.aws-creds` in devyard
-- `AWS_CONFIG_FILE` - Points to `.aws-profile` in devyard
-- `CLAUDE_CONFIG_DIR` - Points to `claude/` in devyard (for skills, agents, commands)
-- `CLAUDE_PLUGIN_DIR` - Points to `claude/plugin/` in devyard
-
-**Claude Configuration:**
-When Devyard auth mode is selected, Claude automatically uses `$VIDYARD_PATH/devyard/claude` as its configuration directory. This allows:
-- Shared access to Claude skills across the team
-- Shared Claude agents and commands
-- Shared MCP plugins in `claude/plugin/`
-- Consistent Claude configuration across all developers
-
-**Where It's Used:**
-- Claude SDK environments (`buildClaudeEnv` in `src/main/lib/claude/env.ts`)
-- Terminal environments (`buildTerminalEnv` in `src/main/lib/terminal/env.ts`)
-- Claude config directory (`getClaudeCodeSettings` in `src/main/lib/trpc/routers/claude.ts`)
-- Available to all Claude agents when "Devyard" auth mode is selected
-
-**Configuration Module:** `src/main/lib/devyard-config.ts`
-
-The configuration is detected once at first use and cached for the app lifetime. Missing configuration files will generate warnings but won't prevent the app from running.
 
 ## Architecture
 
@@ -168,9 +108,8 @@ src/
 │       │   ├── schema/      # Drizzle table definitions
 │       │   └── utils.ts     # ID generation
 │       ├── trpc/routers/    # tRPC routers (projects, chats, claude)
-│       ├── devyard-config.ts # Devyard environment detection
-│       ├── claude/env.ts    # Claude SDK environment (includes Devyard)
-│       └── terminal/env.ts  # Terminal environment (includes Devyard)
+│       ├── claude/env.ts    # Claude SDK environment
+│       └── terminal/env.ts  # Terminal environment
 │
 ├── preload/                 # IPC bridge (context isolation)
 │   └── index.ts             # Exposes desktopApi + tRPC bridge

@@ -5,7 +5,7 @@ This document provides step-by-step implementation instructions for adding AWS B
 ## Step 1: Install Dependencies
 
 ```bash
-cd /Users/jdeland/dev/vidyard/1code
+cd /path/to/claw
 bun add @aws-sdk/client-sso @aws-sdk/client-sso-oidc @aws-sdk/credential-provider-sso
 ```
 

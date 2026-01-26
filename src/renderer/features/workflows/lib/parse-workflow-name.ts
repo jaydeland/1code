@@ -36,9 +36,9 @@ export interface HierarchicalNamespaceGroup<T> {
  *
  * Examples:
  * - "/gsd:plan-phase" -> { namespace: "gsd", remainder: "plan-phase" }
- * - "vidyard.work-report" -> { namespace: "vidyard", remainder: "work-report" }
+ * - "acme.work-report" -> { namespace: "acme", remainder: "work-report" }
  * - "debug-prod" -> { namespace: "debug", remainder: "prod" }
- * - "plugin:vidyard.debug.prod" -> { namespace: "plugin", remainder: "vidyard.debug.prod" }
+ * - "plugin:acme.debug.prod" -> { namespace: "plugin", remainder: "acme.debug.prod" }
  */
 export function parseWorkflowName(name: string): ParsedWorkflowName {
   // Remove leading slash if present

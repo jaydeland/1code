@@ -933,7 +933,7 @@ function extractBackgroundTasks(content: string): BackgroundTaskMetadata[] {
   if (bgTaskMatch && !tasks.some(t => t.type === 'background-tasks')) {
     // Try to find the task list nearby (look for bullet points or code with task names)
     // Only match specific task names, not generic "background task" text
-    const taskNamesPattern = /(?:dy\s+dev|stern|ktop|devyard_monitor\.sh)/gi
+    const taskNamesPattern = /(?:dy\s+dev|stern|ktop)/gi
     const foundTasks = new Set<string>()
     let match
     while ((match = taskNamesPattern.exec(content)) !== null) {
@@ -1428,7 +1428,7 @@ export const workflowsRouter = router({
       }
 
       // Security: Ensure path contains a claude directory somewhere
-      // This allows ~/.claude/, <project>/.claude/, and devyard/claude/
+      // This allows ~/.claude/, <project>/.claude/, and custom claude directories
       if (!resolvedTarget.includes('/.claude/') && !resolvedTarget.includes('/claude/')) {
         console.error('[workflows.readFileContent] Security error: not in claude directory')
         throw new Error("Access denied: path must be within a claude directory")
@@ -1479,7 +1479,7 @@ export const workflowsRouter = router({
       }
 
       // Security: Ensure path contains a claude directory somewhere
-      // This allows ~/.claude/, <project>/.claude/, and devyard/claude/
+      // This allows ~/.claude/, <project>/.claude/, and custom claude directories
       if (!resolvedTarget.includes('/.claude/') && !resolvedTarget.includes('/claude/')) {
         console.error('[workflows.writeFileContent] Security error: not in claude directory')
         throw new Error("Access denied: path must be within a claude directory")
