@@ -71,10 +71,37 @@ function getStoredCredentials(): AwsCredentials | null {
 
 /**
  * Get or create EKS service for a region
+ * Supports both SSO mode (explicit credentials) and Profile mode (default credential chain)
  */
 function getEksService(region: string): EksService | null {
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(claudeCodeSettings)
+    .where(eq(claudeCodeSettings.id, "default"))
+    .get()
+
+  const connectionMethod = settings?.bedrockConnectionMethod || "profile"
+
+  // Profile mode - use default AWS credential chain
+  if (connectionMethod === "profile") {
+    const profileName = settings?.awsProfileName || undefined
+    const cacheKey = `${region}-profile-${profileName || "default"}`
+    let service = eksServiceCache.get(cacheKey)
+
+    if (!service) {
+      console.log(`[clusters] Using AWS profile mode: ${profileName || "default"}`)
+      service = new EksService(region, undefined, profileName)
+      eksServiceCache.set(cacheKey, service)
+    }
+
+    return service
+  }
+
+  // SSO mode - use explicit credentials
   const credentials = getStoredCredentials()
   if (!credentials) {
+    console.log("[clusters] SSO credentials not available")
     return null
   }
 
@@ -88,6 +115,7 @@ function getEksService(region: string): EksService | null {
   let service = eksServiceCache.get(cacheKey)
 
   if (!service) {
+    console.log("[clusters] Using AWS SSO mode with explicit credentials")
     service = new EksService(region, credentials)
     eksServiceCache.set(cacheKey, service)
   }

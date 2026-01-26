@@ -45,16 +45,38 @@ function createCredentialsProvider(credentials: AwsCredentials) {
 export class EksService {
   private eksClient: EKSClient
   private region: string
-  private credentials: ReturnType<typeof createCredentialsProvider>
+  private credentials?: ReturnType<typeof createCredentialsProvider>
 
-  constructor(region: string, awsCredentials: AwsCredentials) {
+  /**
+   * Create EKS service
+   * @param region AWS region
+   * @param awsCredentials Explicit credentials (SSO mode) - leave undefined for profile mode
+   * @param profileName AWS profile name (profile mode) - uses default credential chain
+   */
+  constructor(region: string, awsCredentials?: AwsCredentials, profileName?: string) {
     this.region = region
-    this.credentials = createCredentialsProvider(awsCredentials)
 
-    this.eksClient = new EKSClient({
-      region,
-      credentials: this.credentials,
-    })
+    if (awsCredentials) {
+      // SSO mode - explicit credentials
+      this.credentials = createCredentialsProvider(awsCredentials)
+      this.eksClient = new EKSClient({
+        region,
+        credentials: this.credentials,
+      })
+    } else {
+      // Profile mode - use default credential chain
+      // AWS SDK will load from ~/.aws/credentials using AWS_PROFILE env var or default profile
+      const clientConfig: any = { region }
+
+      // If profile name specified, set it via environment variable approach
+      if (profileName) {
+        process.env.AWS_PROFILE = profileName
+        console.log(`[eks-service] Set AWS_PROFILE to: ${profileName}`)
+      }
+
+      this.eksClient = new EKSClient(clientConfig)
+      console.log(`[eks-service] Using AWS profile mode (profile: ${profileName || "default"})`)
+    }
   }
 
   /**
@@ -157,9 +179,19 @@ export class EksService {
       },
     })
 
+    // Get credentials - either explicit (SSO) or from default chain (profile)
+    const credentials = this.credentials || (async () => {
+      // Profile mode - resolve credentials from default chain
+      const { STSClient, GetCallerIdentityCommand } = await import("@aws-sdk/client-sts")
+      const sts = new STSClient({ region: this.region })
+      // This will use AWS_PROFILE env var or default credentials
+      const resolvedCreds = await sts.config.credentials()
+      return resolvedCreds
+    })()
+
     // Sign the request
     const signer = new SignatureV4({
-      credentials: this.credentials,
+      credentials,
       region: this.region,
       service: "sts",
       sha256: Sha256,
