@@ -591,13 +591,8 @@ function validateMarkdownContent(content: string): LintDiagnostic[] {
       headingLevels.push({ level, line: i + 1 })
 
       if (level === 1) {
-        if (hasH1) {
-          diagnostics.push({
-            severity: "warning",
-            line: i + 1,
-            message: "Multiple H1 headings found - consider using only one main heading",
-          })
-        }
+        // Note: Multiple H1 headings are common in Claude Code workflow files
+        // for organizing different sections - not flagging as an issue
         hasH1 = true
       }
 
@@ -613,27 +608,8 @@ function validateMarkdownContent(content: string): LintDiagnostic[] {
       lastHeadingLevel = level
     }
 
-    // Check for unclosed code blocks
-    if (line.trim().startsWith("```")) {
-      let blockClosed = false
-      for (let j = i + 1; j < lines.length; j++) {
-        if (lines[j]?.trim() === "```") {
-          blockClosed = true
-          break
-        }
-      }
-      if (!blockClosed && !line.includes("```\n")) {
-        // Skip if we're looking at a closing block
-        const nextCodeBlock = lines.slice(i + 1).findIndex((l) => l?.trim().startsWith("```"))
-        if (nextCodeBlock === -1) {
-          diagnostics.push({
-            severity: "warning",
-            line: i + 1,
-            message: "Unclosed code block",
-          })
-        }
-      }
-    }
+    // Note: Unclosed code block detection removed - produces false positives
+    // Code blocks at end of file are valid in workflow documentation
   }
 
   return diagnostics

@@ -103,12 +103,46 @@ export function WorkflowReviewView() {
     }
   }, [fileContent, selectedNode, homeWorkspace, hasStartedReview, reviewChatId, createChatMutation.isPending])
 
-  // Reset when file changes
+  // Persist review chat ID per file to reconnect to existing sessions
+  const reviewChatIdStorageKey = `workflow-review-chat:${selectedNode?.sourcePath}`
+
+  // Load persisted review chat ID when file changes
   useEffect(() => {
+    // Reset state first
     setReviewChatId(null)
     setHasStartedReview(false)
     isStartingReviewRef.current = false
-  }, [selectedNode?.sourcePath])
+
+    // Then try to load persisted session
+    if (selectedNode?.sourcePath) {
+      const stored = localStorage.getItem(reviewChatIdStorageKey)
+      if (stored) {
+        // Verify the chat still exists
+        utils.chats.get.fetch({ id: stored }).then((chat) => {
+          if (chat) {
+            console.log('[WorkflowReview] Reconnecting to existing review session:', stored)
+            setReviewChatId(stored)
+            setSelectedChatId(stored)
+            setHasStartedReview(true)
+            isStartingReviewRef.current = true
+          } else {
+            // Chat was deleted, clear storage
+            console.log('[WorkflowReview] Stored chat not found, will create new session')
+            localStorage.removeItem(reviewChatIdStorageKey)
+          }
+        }).catch(() => {
+          localStorage.removeItem(reviewChatIdStorageKey)
+        })
+      }
+    }
+  }, [selectedNode?.sourcePath, reviewChatIdStorageKey, utils.chats.get, setSelectedChatId])
+
+  // Persist review chat ID when created
+  useEffect(() => {
+    if (reviewChatId && selectedNode?.sourcePath) {
+      localStorage.setItem(reviewChatIdStorageKey, reviewChatId)
+    }
+  }, [reviewChatId, selectedNode?.sourcePath, reviewChatIdStorageKey])
 
   const handleStartReview = async () => {
     if (!fileContent || !selectedNode || !homeWorkspace) return

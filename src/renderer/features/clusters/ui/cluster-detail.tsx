@@ -214,7 +214,7 @@ export function ClusterDetail() {
               </SelectTrigger>
               <SelectContent>
                 {clusters.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
+                  <SelectItem key={`${c.name}-${defaultClusterId === c.name}`} value={c.name}>
                     <div className="flex items-center justify-between gap-2 w-full">
                       <div className="flex items-center gap-2">
                         <span>{c.name}</span>
