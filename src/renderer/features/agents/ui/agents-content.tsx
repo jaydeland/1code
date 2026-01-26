@@ -254,7 +254,7 @@ export function AgentsContent() {
   const sortedChats = agentChats
     ? [...agentChats].sort(
         (a, b) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+          new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime(),
       )
     : []
 
@@ -393,8 +393,8 @@ export function AgentsContent() {
             // Get sorted chat list
             const sortedChats = [...agentChats].sort(
               (a, b) =>
-                new Date(b.updated_at).getTime() -
-                new Date(a.updated_at).getTime(),
+                new Date(b.updatedAt || 0).getTime() -
+                new Date(a.updatedAt || 0).getTime(),
             )
             isNavigatingRef.current = true
             setTimeout(() => {
@@ -865,6 +865,9 @@ export function AgentsContent() {
             <div className="h-full flex flex-col relative overflow-hidden">
               <TerminalMainView />
             </div>
+          ) : selectedSidebarTab === "clusters" ? (
+            // Clusters tab - show clusters view
+            <ClustersContent />
           ) : (
             // For other tabs, show a placeholder detail view
             <div className="h-full flex items-center justify-center">

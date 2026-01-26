@@ -1,11 +1,11 @@
 "use client"
 
 import React, { useEffect } from "react"
-import { useAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import { Search, RefreshCw, Check, X, Loader2, AlertCircle } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedClusterIdAtom, clusterSearchAtom, getDefaultCluster } from "../atoms"
+import { selectedClusterIdAtom, clusterSearchAtom, availableClustersAtom } from "../atoms"
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -41,6 +41,7 @@ function getStatusColor(status: string) {
 export function ClusterList() {
   const [selectedCluster, setSelectedCluster] = useAtom(selectedClusterIdAtom)
   const [search, setSearch] = useAtom(clusterSearchAtom)
+  const setAvailableClusters = useSetAtom(availableClustersAtom)
 
   const {
     data: clusters,
@@ -49,6 +50,14 @@ export function ClusterList() {
     refetch,
     isRefetching,
   } = trpc.clusters.discover.useQuery()
+
+  // Update available clusters atom when clusters load
+  // The derived selectedClusterIdAtom will automatically select a default
+  useEffect(() => {
+    if (clusters && clusters.length > 0) {
+      setAvailableClusters(clusters)
+    }
+  }, [clusters, setAvailableClusters])
 
   // Filter clusters based on search
   const filteredClusters = React.useMemo(() => {
@@ -62,16 +71,6 @@ export function ClusterList() {
         cluster.region.toLowerCase().includes(query)
     )
   }, [clusters, search])
-
-  // Auto-select default cluster (prefer staging-cluster) if none selected
-  useEffect(() => {
-    if (!selectedCluster && clusters && clusters.length > 0) {
-      const defaultCluster = getDefaultCluster(clusters)
-      if (defaultCluster) {
-        setSelectedCluster(defaultCluster)
-      }
-    }
-  }, [clusters, selectedCluster, setSelectedCluster])
 
   if (isLoading) {
     return (

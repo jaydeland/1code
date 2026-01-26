@@ -16,10 +16,10 @@ export const selectedClustersCategoryAtom = atom<"clusters" | null>(null)
 // ============================================
 
 /**
- * Currently selected cluster name for detail view
- * Persisted to localStorage to remember selection across sessions
+ * Base atom for selected cluster (persisted to localStorage)
+ * This stores the user's explicit selection or the auto-selected default
  */
-export const selectedClusterIdAtom = atomWithStorage<string | null>(
+const selectedClusterIdBaseAtom = atomWithStorage<string | null>(
   "clusters:selected-cluster-id",
   null,
   undefined,
@@ -40,6 +40,50 @@ export function getDefaultCluster(clusters: Array<{ name: string }>): string | n
   // Fallback to first cluster
   return clusters[0].name
 }
+
+/**
+ * Atom that stores the available clusters list
+ * This is set by the component when clusters are loaded from tRPC
+ */
+export const availableClustersAtom = atom<Array<{ name: string }>>([])
+
+/**
+ * Derived atom that ensures a cluster is always selected when clusters are available
+ * READ: Returns the current selection, or auto-selects a default if none is set
+ * WRITE: Updates the selected cluster and persists to localStorage
+ */
+export const selectedClusterIdAtom = atom(
+  (get) => {
+    const baseSelection = get(selectedClusterIdBaseAtom)
+    const clusters = get(availableClustersAtom)
+
+    // If no clusters available yet, return null
+    if (!clusters || clusters.length === 0) {
+      return null
+    }
+
+    // Always prefer staging-cluster if it exists (overrides localStorage)
+    const hasStagingCluster = clusters.some((c) => c.name === "staging-cluster")
+    if (hasStagingCluster) {
+      return "staging-cluster"
+    }
+
+    // If we have a selection and it's still valid, keep it
+    if (baseSelection) {
+      const isValid = clusters.some((c) => c.name === baseSelection)
+      if (isValid) {
+        return baseSelection
+      }
+    }
+
+    // No valid selection - return default
+    return getDefaultCluster(clusters)
+  },
+  (get, set, newValue: string | null) => {
+    // When writing, update both the base atom and persist to localStorage
+    set(selectedClusterIdBaseAtom, newValue)
+  }
+)
 
 // ============================================
 // CLUSTERS SEARCH STATE

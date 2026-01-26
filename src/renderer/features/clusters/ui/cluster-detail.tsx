@@ -1,12 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Copy, Check, AlertCircle, Loader2, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { selectedClusterIdAtom, selectedClusterTabAtom, getDefaultCluster } from "../atoms"
+import {
+  selectedClusterIdAtom,
+  selectedClusterTabAtom,
+  availableClustersAtom,
+} from "../atoms"
 import { ClusterTabs } from "./cluster-tabs"
 import { DashboardTab } from "./dashboard-tab"
 import { NodesTab } from "./nodes-tab"
@@ -58,6 +62,7 @@ function InfoRow({
 export function ClusterDetail() {
   const [selectedClusterId, setSelectedClusterId] = useAtom(selectedClusterIdAtom)
   const selectedTab = useAtomValue(selectedClusterTabAtom)
+  const setAvailableClusters = useSetAtom(availableClustersAtom)
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
   // Get list of all clusters for the dropdown
@@ -68,35 +73,13 @@ export function ClusterDetail() {
     isRefetching,
   } = trpc.clusters.discover.useQuery()
 
-  // Always prefer staging-cluster if present, otherwise validate current selection
+  // Update available clusters atom when clusters load
+  // The derived selectedClusterIdAtom will automatically select a default
   useEffect(() => {
-    if (!clusters || clusters.length === 0) return
-
-    // Always prefer staging-cluster if it's in the list (overrides localStorage)
-    const hasStagingCluster = clusters.some((c) => c.name === "staging-cluster")
-    if (hasStagingCluster && selectedClusterId !== "staging-cluster") {
-      setSelectedClusterId("staging-cluster")
-      return
+    if (clusters && clusters.length > 0) {
+      setAvailableClusters(clusters)
     }
-
-    // If no cluster selected, use default selection logic
-    if (!selectedClusterId) {
-      const defaultCluster = getDefaultCluster(clusters)
-      if (defaultCluster) {
-        setSelectedClusterId(defaultCluster)
-      }
-      return
-    }
-
-    // Validate that selected cluster still exists in the list
-    const isSelectedValid = clusters.some((c) => c.name === selectedClusterId)
-    if (!isSelectedValid) {
-      const defaultCluster = getDefaultCluster(clusters)
-      if (defaultCluster) {
-        setSelectedClusterId(defaultCluster)
-      }
-    }
-  }, [clusters, selectedClusterId, setSelectedClusterId])
+  }, [clusters, setAvailableClusters])
 
   // Get cluster details for selected cluster
   const { data: cluster, isLoading: clusterLoading } = trpc.clusters.get.useQuery(
