@@ -1884,4 +1884,27 @@ ${prompt}
       pendingToolApprovals.delete(input.toolUseId)
       return { ok: true }
     }),
+
+  /**
+   * Fix TypeScript/ESLint errors in a file using Claude
+   */
+  fixLintErrors: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string(),
+        diagnostics: z.array(
+          z.object({
+            message: z.string(),
+            line: z.number().optional(),
+            column: z.number().optional(),
+            severity: z.string().optional(),
+          })
+        ),
+        cwd: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { fixLintErrors } = await import("../../claude/background-session")
+      return fixLintErrors(input.filePath, input.diagnostics, input.cwd)
+    }),
 })

@@ -12,7 +12,6 @@
 
 import { app } from "electron"
 import * as path from "path"
-import * as os from "os"
 import { buildClaudeEnv, getBundledClaudeBinaryPath } from "./env"
 import { getDatabase, claudeCodeCredentials } from "../db"
 import { eq } from "drizzle-orm"
@@ -446,4 +445,156 @@ export async function resetBackgroundSession(): Promise<void> {
 
   backgroundConfigDir = null
   console.log("[background-session] Reset complete")
+}
+
+/**
+ * Fix TypeScript/ESLint errors in a file using Claude
+ *
+ * Uses the Claude SDK in agent mode to automatically fix linting issues.
+ * Claude will read the file, analyze errors, and use the Edit tool to apply fixes.
+ *
+ * @param filePath - Absolute path to the file with errors
+ * @param diagnostics - Array of error/warning diagnostics
+ * @param cwd - Working directory (project root)
+ * @returns Result with success status and number of changes applied
+ */
+export async function fixLintErrors(
+  filePath: string,
+  diagnostics: Array<{ message: string; line?: number; column?: number; severity?: string }>,
+  cwd: string
+): Promise<{
+  success: boolean
+  error?: string
+  changesApplied?: number
+  output?: string
+}> {
+  if (!isBackgroundSessionReady()) {
+    return {
+      success: false,
+      error: "Background session not ready. Try restarting the app.",
+    }
+  }
+
+  try {
+    console.log(`[background-session] Fixing ${diagnostics.length} lint errors in ${filePath}`)
+
+    // Format diagnostics for the prompt
+    const formattedDiagnostics = diagnostics
+      .map((d, i) => {
+        const location = d.line ? `Line ${d.line}${d.column ? `:${d.column}` : ""}` : "Unknown location"
+        const severity = d.severity ? `[${d.severity.toUpperCase()}]` : ""
+        return `${i + 1}. ${location} ${severity} ${d.message}`
+      })
+      .join("\n")
+
+    const prompt = `Fix the TypeScript/ESLint errors in this file. Use the Read and Edit tools.
+
+File: ${filePath}
+
+Errors to fix (${diagnostics.length} total):
+${formattedDiagnostics}
+
+Instructions:
+1. Read the file first to see the current code
+2. Analyze each error carefully
+3. Use the Edit tool to fix each issue with minimal changes
+4. Only fix the specific errors listed - do not refactor or add features
+5. Do not add comments explaining the fixes
+6. Preserve code style and formatting
+7. After fixing, output a summary of changes made
+
+Start by reading the file.`
+
+    // Get Claude SDK
+    const claudeQuery = await getClaudeQuery()
+    const claudeCodeToken = getClaudeCodeToken()
+    const claudeEnv = buildClaudeEnv()
+
+    const finalEnv: Record<string, string> = {
+      ...claudeEnv,
+      ...(claudeCodeToken && {
+        CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
+      }),
+      ...(backgroundConfigDir && {
+        CLAUDE_CONFIG_DIR: backgroundConfigDir,
+      }),
+    }
+
+    const claudeBinaryPath = getBundledClaudeBinaryPath()
+
+    // Create abort controller for this operation
+    const abortController = new AbortController()
+
+    const queryOptions = {
+      prompt,
+      options: {
+        abortController,
+        cwd,
+        systemPrompt: {
+          type: "preset" as const,
+          preset: "claude_code" as const,
+        },
+        env: finalEnv,
+        permissionMode: "bypassPermissions" as const,
+        allowDangerouslySkipPermissions: true,
+        pathToClaudeCodeExecutable: claudeBinaryPath,
+        resume: sessionState.sessionId || undefined,
+        continue: true,
+        model: "sonnet", // Use sonnet for code fixes (better at code)
+      },
+    }
+
+    const stream = claudeQuery(queryOptions)
+    let responseText = ""
+    let toolUseCount = 0
+
+    for await (const msg of stream) {
+      const msgAny = msg as any
+
+      // Update sessionId
+      if (msgAny.session_id) {
+        sessionState.sessionId = msgAny.session_id
+      }
+
+      // Count Edit tool uses
+      if (msgAny.type === "tool_use" && msgAny.tool_name === "Edit") {
+        toolUseCount++
+      }
+
+      // Collect text response
+      if (msgAny.type === "assistant" && msgAny.message?.content) {
+        for (const block of msgAny.message.content) {
+          if (block.type === "text") {
+            responseText += block.text
+          }
+        }
+      }
+
+      // Check for completion
+      if (msgAny.type === "result") {
+        if (msgAny.result) {
+          responseText = msgAny.result
+        }
+        break
+      }
+    }
+
+    sessionState.requestCount++
+    sessionState.lastUsedTime = new Date()
+
+    console.log(`[background-session] Fixed ${toolUseCount} issues in ${filePath}`)
+
+    return {
+      success: true,
+      changesApplied: toolUseCount,
+      output: responseText,
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error("[background-session] Lint fix failed:", errorMessage)
+    return {
+      success: false,
+      error: errorMessage,
+    }
+  }
 }
