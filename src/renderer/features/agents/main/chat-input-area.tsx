@@ -302,6 +302,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   onApprovePlan,
   onCompact,
   onCreateNewSubChat,
+  onShowTasks,
   isStreaming,
   hasUnapprovedPlan,
   isCompacting,

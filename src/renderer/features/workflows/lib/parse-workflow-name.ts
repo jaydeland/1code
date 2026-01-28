@@ -41,6 +41,16 @@ export interface HierarchicalNamespaceGroup<T> {
  * - "plugin:acme.debug.prod" -> { namespace: "plugin", remainder: "acme.debug.prod" }
  */
 export function parseWorkflowName(name: string): ParsedWorkflowName {
+  // Handle undefined, null, or non-string values
+  if (name == null || typeof name !== 'string') {
+    return {
+      namespace: null,
+      remainder: '',
+      displayName: '',
+      fullName: '',
+    }
+  }
+
   // Remove leading slash if present
   const cleaned = name.startsWith('/') ? name.slice(1) : name
 
@@ -102,6 +112,11 @@ export function parseWorkflowName(name: string): ParsedWorkflowName {
  * - "execute" -> { prefix: null, subName: "execute" }
  */
 function extractSubGroupPrefix(remainder: string): { prefix: string | null; subName: string } {
+  // Handle undefined, null, or empty strings
+  if (!remainder || typeof remainder !== 'string') {
+    return { prefix: null, subName: remainder || '' }
+  }
+
   // Find all separator positions
   const separators = [
     { char: ':', index: remainder.indexOf(':') },
@@ -133,6 +148,10 @@ export function groupWorkflowsByNamespace<T extends { name: string }>(
   const groups: Record<string, T[]> = {}
 
   for (const workflow of workflows) {
+    // Skip workflows with invalid names
+    if (!workflow || typeof workflow.name !== 'string') {
+      continue
+    }
     const parsed = parseWorkflowName(workflow.name)
     const groupKey = parsed.namespace || 'General'
 
@@ -176,6 +195,10 @@ export function groupWorkflowsHierarchically<T extends { name: string }>(
   const namespaceMap = new Map<string, Array<T & { parsed: ParsedWorkflowName }>>()
 
   for (const workflow of workflows) {
+    // Skip workflows with invalid names
+    if (!workflow || typeof workflow.name !== 'string') {
+      continue
+    }
     const parsed = parseWorkflowName(workflow.name)
     const namespace = parsed.namespace || 'General'
 
