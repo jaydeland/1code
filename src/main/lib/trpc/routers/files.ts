@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { readdir, stat } from "node:fs/promises"
+import { readdir, stat, readFile } from "node:fs/promises"
 import { join, relative, basename } from "node:path"
 
 // Directories to ignore when scanning
@@ -260,5 +260,81 @@ export const filesRouter = router({
     .mutation(({ input }) => {
       fileListCache.delete(input.projectPath)
       return { success: true }
+    }),
+
+  /**
+   * Read task output file for streaming background task output
+   */
+  readTaskOutput: publicProcedure
+    .input(
+      z.object({
+        filePath: z.string(),
+        tail: z.number().optional(), // Number of lines from end to read (optional)
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const content = await readFile(input.filePath, "utf-8")
+
+        // If tail is specified, return only last N lines
+        if (input.tail) {
+          const lines = content.split("\n")
+          const tailLines = lines.slice(-input.tail)
+          return {
+            success: true,
+            content: tailLines.join("\n"),
+            lineCount: lines.length,
+            tailLineCount: tailLines.length,
+          }
+        }
+
+        return {
+          success: true,
+          content,
+          lineCount: content.split("\n").length,
+        }
+      } catch (error: any) {
+        // File might not exist yet or not readable
+        return {
+          success: false,
+          content: "",
+          error: error.message,
+        }
+      }
+    }),
+
+  /**
+   * Check if a background task is still running by checking its output file
+   */
+  checkTaskStatus: publicProcedure
+    .input(
+      z.object({
+        backgroundTaskId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const { exec } = await import("node:child_process")
+      const { promisify } = await import("node:util")
+      const execAsync = promisify(exec)
+
+      try {
+        // Use 'ps' to check if process with this task ID is still running
+        // Background tasks create files in /tmp/claude-* directories
+        const { stdout } = await execAsync(`ps aux | grep "${input.backgroundTaskId}" | grep -v grep || true`)
+
+        const isRunning = stdout.trim().length > 0
+
+        return {
+          isRunning,
+          processInfo: stdout.trim() || null,
+        }
+      } catch (error: any) {
+        // Error checking process, assume not running
+        return {
+          isRunning: false,
+          processInfo: null,
+          error: error.message,
+        }
+      }
     }),
 })

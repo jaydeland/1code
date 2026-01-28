@@ -32,6 +32,7 @@ export function LogsTab() {
   const [excludeIstioSidecar, setExcludeIstioSidecar] = useState(true)
   const [isStreaming, setIsStreaming] = useState(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [streamError, setStreamError] = useState<string | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
 
@@ -60,10 +61,31 @@ export function LogsTab() {
     { enabled: !!selectedClusterId && status?.connected && !!currentNamespace }
   )
 
-  // Get pods in selected namespace for log streaming
-  const { data: pods } = trpc.clusters.getPods.useQuery(
-    { clusterName: selectedClusterId!, namespace: currentNamespace },
-    { enabled: !!selectedClusterId && status?.connected && !!currentNamespace }
+  // Stream logs using tRPC subscription
+  trpc.clusters.streamLogs.useSubscription(
+    {
+      clusterName: selectedClusterId!,
+      namespace: currentNamespace,
+      services: selectedServices,
+      excludeIstioSidecar,
+    },
+    {
+      enabled: isStreaming && selectedServices.length > 0 && !!selectedClusterId && status?.connected,
+      onData: (log) => {
+        // Clear any previous errors once we start receiving logs
+        setStreamError(null)
+        setLogs((prev) => {
+          const updated = [...prev, log]
+          // Keep only last 500 logs
+          return updated.slice(-500)
+        })
+      },
+      onError: (error) => {
+        console.error("[LogsTab] Stream error:", error)
+        setStreamError(error.message || "Failed to stream logs")
+        setIsStreaming(false)
+      },
+    }
   )
 
   // Auto-scroll to bottom when new logs arrive
@@ -72,53 +94,6 @@ export function LogsTab() {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [logs, autoScroll])
-
-  // Simulate log streaming (in real implementation, this would use WebSocket or Server-Sent Events)
-  useEffect(() => {
-    if (!isStreaming || selectedServices.length === 0 || !pods) {
-      return
-    }
-
-    // Filter pods by selected services
-    const servicePods = pods.filter((pod) => {
-      // Match pod name prefix with service name
-      return selectedServices.some((svc) => pod.name.startsWith(svc))
-    })
-
-    if (servicePods.length === 0) {
-      return
-    }
-
-    // Simulate streaming logs
-    const interval = setInterval(() => {
-      const randomPod = servicePods[Math.floor(Math.random() * servicePods.length)]
-
-      // Get container names from pod
-      const containerName = excludeIstioSidecar && randomPod.containerCount > 1
-        ? "app" // Assume main container is named "app"
-        : "app"
-
-      // Skip if this is an istio sidecar
-      if (excludeIstioSidecar && containerName === "istio-proxy") {
-        return
-      }
-
-      const newLog: LogEntry = {
-        timestamp: new Date().toISOString(),
-        podName: randomPod.name,
-        containerName,
-        message: `[${randomPod.name}] Sample log message at ${new Date().toLocaleTimeString()}`,
-      }
-
-      setLogs((prev) => {
-        const updated = [...prev, newLog]
-        // Keep only last 500 logs
-        return updated.slice(-500)
-      })
-    }, 2000)
-
-    return () => clearInterval(interval)
-  }, [isStreaming, selectedServices, pods, excludeIstioSidecar])
 
   const handleServiceToggle = (serviceName: string) => {
     setSelectedServices((prev) =>
@@ -133,6 +108,7 @@ export function LogsTab() {
       return
     }
     setLogs([])
+    setStreamError(null)
     setIsStreaming(true)
   }
 
@@ -276,7 +252,27 @@ export function LogsTab() {
 
       {/* Log Display */}
       <div className="flex-1 overflow-y-auto bg-muted/30 p-4">
-        {logs.length === 0 ? (
+        {streamError ? (
+          <div className="flex flex-col items-center justify-center h-full gap-4">
+            <div className="p-4 rounded-full bg-red-500/10">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+            <div className="text-center max-w-2xl">
+              <h3 className="text-lg font-medium text-foreground mb-2">Log Streaming Error</h3>
+              <p className="text-sm text-muted-foreground mb-4">{streamError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setStreamError(null)
+                  handleStartStreaming()
+                }}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-md"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
             <div className="p-4 rounded-full bg-muted/50">
               <ScrollText className="h-8 w-8" />

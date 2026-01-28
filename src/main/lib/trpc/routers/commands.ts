@@ -4,8 +4,57 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import matter from "gray-matter"
+import yaml from "js-yaml"
 import { eq } from "drizzle-orm"
 import { getDatabase, configSources } from "../../db"
+
+// Custom YAML parser that's more forgiving with special characters
+function parseYamlSafe(input: string): Record<string, any> {
+  try {
+    // Try standard parsing first
+    return yaml.load(input, { schema: yaml.DEFAULT_SCHEMA }) as Record<string, any>
+  } catch (err) {
+    // If that fails, try line-by-line parsing for simple key: value pairs
+    const result: Record<string, any> = {}
+    const lines = input.split('\n')
+    let currentKey: string | null = null
+    let currentValue = ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+
+      // Check if this is a key: value line
+      const colonIndex = trimmed.indexOf(':')
+      if (colonIndex > 0 && colonIndex < trimmed.length - 1) {
+        // Save previous key-value if exists
+        if (currentKey) {
+          result[currentKey] = currentValue.trim()
+        }
+
+        // Start new key-value
+        currentKey = trimmed.slice(0, colonIndex).trim()
+        currentValue = trimmed.slice(colonIndex + 1).trim()
+      } else if (currentKey && trimmed.startsWith('-')) {
+        // Array item
+        if (!Array.isArray(result[currentKey])) {
+          result[currentKey] = []
+        }
+        (result[currentKey] as string[]).push(trimmed.slice(1).trim())
+      } else if (currentKey) {
+        // Continuation of previous value
+        currentValue += ' ' + trimmed
+      }
+    }
+
+    // Save last key-value
+    if (currentKey) {
+      result[currentKey] = currentValue.trim()
+    }
+
+    return result
+  }
+}
 
 interface FileCommand {
   name: string
@@ -40,7 +89,11 @@ function parseCommandMd(content: string): {
   argumentHint?: string
 } {
   try {
-    const { data } = matter(content)
+    const { data } = matter(content, {
+      engines: {
+        yaml: { parse: parseYamlSafe }
+      }
+    })
     return {
       description:
         typeof data.description === "string" ? data.description : undefined,
@@ -200,7 +253,11 @@ export const commandsRouter = router({
 
       try {
         const content = await fs.readFile(input.path, "utf-8")
-        const { content: body } = matter(content)
+        const { content: body } = matter(content, {
+          engines: {
+            yaml: { parse: parseYamlSafe }
+          }
+        })
         return { content: body.trim() }
       } catch (err) {
         console.error(`[commands] Failed to read command content:`, err)

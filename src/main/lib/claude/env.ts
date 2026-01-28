@@ -52,19 +52,24 @@ export function getAwsCredentials(): AwsCredentials | null {
       return null
     }
 
-    // SSO mode
-    if (settings.bedrockConnectionMethod === "sso") {
+    // CRITICAL: Check connection method - SSO takes precedence
+    const connectionMethod = settings.bedrockConnectionMethod || "profile"
+
+    // SSO mode - MUST have valid SSO credentials
+    if (connectionMethod === "sso") {
       if (!settings.awsAccessKeyId || !settings.awsSecretAccessKey) {
-        console.warn("[claude-env] AWS SSO credentials not available")
+        console.warn("[claude-env] SSO mode selected but credentials not available")
         return null
       }
 
       // Check expiration
       if (settings.awsCredentialsExpiresAt && settings.awsCredentialsExpiresAt < new Date()) {
-        console.warn("[claude-env] AWS credentials expired")
+        console.warn("[claude-env] SSO credentials expired")
         return null
       }
 
+      // Return SSO credentials with explicit precedence
+      console.log("[claude-env] Using SSO credentials (connection method: sso)")
       return {
         accessKeyId: decrypt(settings.awsAccessKeyId),
         secretAccessKey: decrypt(settings.awsSecretAccessKey),
@@ -74,7 +79,7 @@ export function getAwsCredentials(): AwsCredentials | null {
     }
 
     // Profile mode - rely on AWS SDK to load from ~/.aws/
-    // Just return the region and profile name, credentials will be loaded by SDK
+    console.log("[claude-env] Using profile mode (connection method: profile)")
     return {
       accessKeyId: "", // SDK will load from profile
       secretAccessKey: "",

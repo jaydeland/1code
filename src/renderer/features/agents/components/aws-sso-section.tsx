@@ -33,6 +33,10 @@ interface AwsSsoSectionProps {
   onVpnCheckEnabledChange: (enabled: boolean) => void
   vpnCheckUrl?: string | null
   onVpnCheckUrlChange: (url: string) => void
+  connectionMethod: "sso" | "profile"
+  onConnectionMethodChange: (method: "sso" | "profile") => void
+  awsProfileName: string
+  onAwsProfileNameChange: (name: string) => void
 }
 
 type ConnectionMethod = "sso" | "profile"
@@ -92,11 +96,13 @@ export function AwsSsoSection({
   onVpnCheckEnabledChange,
   vpnCheckUrl,
   onVpnCheckUrlChange,
+  connectionMethod,
+  onConnectionMethodChange,
+  awsProfileName,
+  onAwsProfileNameChange,
 }: AwsSsoSectionProps) {
-  const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>("sso")
   const [ssoStartUrl, setSsoStartUrl] = useState("")
   const [ssoRegion, setSsoRegion] = useState("us-east-1")
-  const [awsProfileName, setAwsProfileName] = useState("")
 
   // SSO login state
   const [isAuthenticating, setIsAuthenticating] = useState(false)
@@ -122,6 +128,7 @@ export function AwsSsoSection({
   const selectProfileMutation = trpc.awsSso.selectProfile.useMutation()
   const refreshCredentialsMutation = trpc.awsSso.refreshCredentials.useMutation()
   const logoutMutation = trpc.awsSso.logout.useMutation()
+  const validateCredentialsMutation = trpc.awsSso.validateSsoCredentials.useMutation()
   const { data: accountsData, refetch: refetchAccounts } = trpc.awsSso.listAccounts.useQuery(
     undefined,
     { enabled: !!ssoStatus?.authenticated }
@@ -152,10 +159,10 @@ export function AwsSsoSection({
       if (ssoStatus.accountId) setSelectedAccountId(ssoStatus.accountId)
       if (ssoStatus.roleName) setSelectedRoleName(ssoStatus.roleName)
       if (ssoStatus.authenticated) {
-        setConnectionMethod("sso")
+        onConnectionMethodChange("sso")
       }
     }
-  }, [ssoStatus])
+  }, [ssoStatus, onConnectionMethodChange])
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -356,7 +363,7 @@ export function AwsSsoSection({
           <Button
             variant={connectionMethod === "sso" ? "default" : "outline"}
             size="sm"
-            onClick={() => setConnectionMethod("sso")}
+            onClick={() => onConnectionMethodChange("sso")}
             className="flex-1"
           >
             SSO (IAM Identity Center)
@@ -364,7 +371,7 @@ export function AwsSsoSection({
           <Button
             variant={connectionMethod === "profile" ? "default" : "outline"}
             size="sm"
-            onClick={() => setConnectionMethod("profile")}
+            onClick={() => onConnectionMethodChange("profile")}
             className="flex-1"
           >
             AWS Profile
@@ -554,6 +561,37 @@ export function AwsSsoSection({
                 </div>
               )}
 
+              {/* Test Credentials Button - show when credentials exist */}
+              {ssoStatus?.hasCredentials && (
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const result = await validateCredentialsMutation.mutateAsync()
+                        if (result.valid) {
+                          toast.success(`Credentials validated successfully\nAccount: ${result.accountId}`)
+                        } else {
+                          toast.error(result.error || "Validation failed")
+                        }
+                      } catch (error: any) {
+                        toast.error(error.message || "Failed to validate credentials")
+                      }
+                    }}
+                    disabled={validateCredentialsMutation.isPending}
+                    className="w-full"
+                  >
+                    {validateCredentialsMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-2" />
+                    )}
+                    Test Credentials
+                  </Button>
+                </div>
+              )}
+
               {/* Logout Button */}
               <div className="flex justify-end">
                 <Button
@@ -579,7 +617,7 @@ export function AwsSsoSection({
             <Label className="text-sm">AWS Profile Name</Label>
             <Input
               value={awsProfileName}
-              onChange={(e) => setAwsProfileName(e.target.value)}
+              onChange={(e) => onAwsProfileNameChange(e.target.value)}
               placeholder="default"
               className="font-mono text-sm"
             />

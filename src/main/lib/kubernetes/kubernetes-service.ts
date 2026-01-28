@@ -2,6 +2,7 @@
  * Kubernetes service wrapping kubernetesjs with EKS authentication
  * Provides high-level methods for cluster operations
  */
+import https from "node:https"
 import { KubernetesClient } from "kubernetesjs"
 import type { EksClusterInfo } from "../aws/eks-service"
 
@@ -29,6 +30,9 @@ export interface K8sPod {
   age: Date
   nodeName: string
   containerCount: number
+  metadata?: {
+    labels?: Record<string, string>
+  }
 }
 
 export interface K8sDeployment {
@@ -78,9 +82,10 @@ export function createK8sClient(
     restEndpoint: cluster.endpoint,
   })
 
-  // Store the token for use in requests
-  // Note: We'll pass it via opts.headers on each request
+  // Store the token, endpoint, and CA for use in requests
+  // Note: We'll pass them via opts.headers on each request
   ;(client as any)._eksToken = token
+  ;(client as any)._eksEndpoint = cluster.endpoint
   ;(client as any)._eksCa = cluster.certificateAuthority
 
   return client
@@ -89,7 +94,7 @@ export function createK8sClient(
 /**
  * Get request options with EKS authentication
  */
-function getAuthOpts(client: KubernetesClient) {
+export function getAuthOpts(client: KubernetesClient) {
   const token = (client as any)._eksToken
   return {
     headers: {
@@ -184,6 +189,9 @@ export async function listPods(
         : new Date(),
       nodeName: pod.spec?.nodeName || "",
       containerCount: totalCount,
+      metadata: {
+        labels: pod.metadata?.labels || {},
+      },
     }
   })
 }
@@ -480,5 +488,217 @@ export async function listPodMetrics(
   } catch (error) {
     console.error("[kubernetes-service] Failed to fetch pod metrics:", error)
     return []
+  }
+}
+
+// ============================================================================
+// Log Streaming
+// ============================================================================
+
+export interface LogEntry {
+  timestamp: string
+  podName: string
+  containerName: string
+  message: string
+}
+
+/**
+ * Stream logs from pods in a namespace
+ * @param client - Kubernetes client
+ * @param namespace - Namespace to stream logs from
+ * @param podNames - Array of pod names to stream logs from
+ * @param excludeIstioSidecar - Whether to exclude istio-proxy container logs
+ * @param onLog - Callback for each log entry
+ * @param onError - Callback for errors
+ * @returns Cleanup function to stop streaming
+ */
+export function streamPodLogs(
+  client: KubernetesClient,
+  namespace: string,
+  podNames: string[],
+  excludeIstioSidecar: boolean,
+  onLog: (log: LogEntry) => void,
+  onError: (error: Error) => void
+): () => void {
+  const opts = getAuthOpts(client)
+  const abortControllers: AbortController[] = []
+  let isActive = true
+
+  // Stream logs from each pod
+  for (const podName of podNames) {
+    streamPodLogsSingle(client, namespace, podName, excludeIstioSidecar, onLog, onError, opts, abortControllers, () => isActive)
+  }
+
+  // Return cleanup function
+  return () => {
+    isActive = false
+    abortControllers.forEach(controller => controller.abort())
+  }
+}
+
+async function streamPodLogsSingle(
+  client: KubernetesClient,
+  namespace: string,
+  podName: string,
+  excludeIstioSidecar: boolean,
+  onLog: (log: LogEntry) => void,
+  onError: (error: Error) => void,
+  opts: ReturnType<typeof getAuthOpts>,
+  abortControllers: AbortController[],
+  isActive: () => boolean
+) {
+  try {
+    // Get pod details to find containers
+    const pod = await client.readCoreV1NamespacedPod(
+      { path: { name: podName, namespace } },
+      opts
+    )
+
+    const containers = pod.spec?.containers || []
+
+    for (const container of containers) {
+      const containerName = container.name
+
+      // Skip istio-proxy if excluded
+      if (excludeIstioSidecar && containerName === "istio-proxy") {
+        continue
+      }
+
+      // Stream logs for this container
+      streamContainerLogs(
+        client,
+        namespace,
+        podName,
+        containerName,
+        onLog,
+        onError,
+        opts,
+        abortControllers,
+        isActive
+      )
+    }
+  } catch (error) {
+    console.error(`[kubernetes-service] Failed to get pod ${podName}:`, error)
+    onError(error instanceof Error ? error : new Error(String(error)))
+  }
+}
+
+async function streamContainerLogs(
+  client: KubernetesClient,
+  namespace: string,
+  podName: string,
+  containerName: string,
+  onLog: (log: LogEntry) => void,
+  onError: (error: Error) => void,
+  opts: ReturnType<typeof getAuthOpts>,
+  abortControllers: AbortController[],
+  isActive: () => boolean
+) {
+  const abortController = new AbortController()
+  abortControllers.push(abortController)
+
+  try {
+    // Get the cluster endpoint from the client
+    const endpoint = (client as any)._eksEndpoint as string
+    if (!endpoint) {
+      throw new Error("Cluster endpoint not available on client")
+    }
+    const url = new URL(endpoint)
+
+    // Build the log streaming path
+    const path = `/api/v1/namespaces/${namespace}/pods/${podName}/log?follow=true&container=${containerName}&timestamps=true&tailLines=100`
+
+    const requestOptions = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path,
+      method: "GET",
+      headers: opts.headers,
+      // Disable certificate validation (same as we do for the main client)
+      rejectUnauthorized: false,
+    }
+
+    const req = https.request(requestOptions, (res) => {
+      let buffer = ""
+
+      res.on("data", (chunk: Buffer) => {
+        if (!isActive()) {
+          res.destroy()
+          return
+        }
+
+        buffer += chunk.toString("utf8")
+        const lines = buffer.split("\n")
+
+        // Keep the last partial line in the buffer
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (line.trim()) {
+            const logEntry = parseLogLine(line, podName, containerName)
+            if (logEntry) {
+              onLog(logEntry)
+            }
+          }
+        }
+      })
+
+      res.on("error", (err: Error) => {
+        if (!abortController.signal.aborted) {
+          console.error(`[kubernetes-service] Stream error for ${podName}/${containerName}:`, err)
+          onError(err)
+        }
+      })
+
+      res.on("end", () => {
+        // Stream ended, could reconnect if needed
+        console.log(`[kubernetes-service] Stream ended for ${podName}/${containerName}`)
+      })
+    })
+
+    req.on("error", (err: Error) => {
+      if (!abortController.signal.aborted) {
+        console.error(`[kubernetes-service] Request error for ${podName}/${containerName}:`, err)
+        onError(err)
+      }
+    })
+
+    // Handle abort signal
+    abortController.signal.addEventListener("abort", () => {
+      req.destroy()
+    })
+
+    req.end()
+  } catch (error) {
+    if (!abortController.signal.aborted) {
+      console.error(`[kubernetes-service] Failed to stream logs for ${podName}/${containerName}:`, error)
+      onError(error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+}
+
+/**
+ * Parse a log line with timestamp
+ * Format: "2024-01-26T10:30:45.123456789Z log message here"
+ */
+function parseLogLine(line: string, podName: string, containerName: string): LogEntry | null {
+  // Match timestamp at the start of the line
+  const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(.*)$/)
+
+  if (timestampMatch) {
+    return {
+      timestamp: timestampMatch[1],
+      podName,
+      containerName,
+      message: timestampMatch[2],
+    }
+  }
+
+  // If no timestamp, use current time
+  return {
+    timestamp: new Date().toISOString(),
+    podName,
+    containerName,
+    message: line,
   }
 }

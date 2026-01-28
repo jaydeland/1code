@@ -136,6 +136,9 @@ export const claudeSettingsRouter = router({
       bedrockHaikuModel: settings.bedrockHaikuModel || "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
       maxMcpOutputTokens: settings.maxMcpOutputTokens ?? 200000,
       maxThinkingTokens: settings.maxThinkingTokens ?? 1000000,
+      // AWS connection method
+      bedrockConnectionMethod: (settings.bedrockConnectionMethod || "profile") as "sso" | "profile",
+      awsProfileName: settings.awsProfileName || null,
     }
   }),
 
@@ -162,6 +165,9 @@ export const claudeSettingsRouter = router({
         bedrockHaikuModel: z.string().optional(),
         maxMcpOutputTokens: z.number().optional(),
         maxThinkingTokens: z.number().optional(),
+        // AWS connection method
+        bedrockConnectionMethod: z.enum(["sso", "profile"]).optional(),
+        awsProfileName: z.string().nullable().optional(),
       })
     )
     .mutation(({ input }) => {
@@ -236,6 +242,13 @@ export const claudeSettingsRouter = router({
             ...(input.maxThinkingTokens !== undefined && {
               maxThinkingTokens: input.maxThinkingTokens,
             }),
+            // AWS connection method
+            ...(input.bedrockConnectionMethod !== undefined && {
+              bedrockConnectionMethod: input.bedrockConnectionMethod,
+            }),
+            ...(input.awsProfileName !== undefined && {
+              awsProfileName: input.awsProfileName,
+            }),
             updatedAt: new Date(),
           })
           .where(eq(claudeCodeSettings.id, "default"))
@@ -260,6 +273,9 @@ export const claudeSettingsRouter = router({
             bedrockHaikuModel: input.bedrockHaikuModel ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0[1m]",
             maxMcpOutputTokens: input.maxMcpOutputTokens ?? 200000,
             maxThinkingTokens: input.maxThinkingTokens ?? 1000000,
+            // AWS connection method
+            bedrockConnectionMethod: input.bedrockConnectionMethod ?? "profile",
+            awsProfileName: input.awsProfileName ?? null,
             ...(input.authMode === "apiKey" && input.apiKey && {
               apiKey: encryptApiKey(input.apiKey),
             }),

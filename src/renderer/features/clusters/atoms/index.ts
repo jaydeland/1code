@@ -128,7 +128,7 @@ export const selectedNamespaceAtom = atom<string | null>(null)
 // TAB SELECTION
 // ============================================
 
-export type ClusterTab = "dashboard" | "nodes" | "pods" | "services" | "deployments" | "logs"
+export type ClusterTab = "dashboard" | "pvcs" | "pods" | "services" | "deployments" | "logs"
 
 /**
  * Currently selected tab in cluster detail view

@@ -287,16 +287,87 @@ export const awsSsoRouter = router({
           awsSecretAccessKey: credentials.secretAccessKey,
           awsSessionToken: credentials.sessionToken,
           awsCredentialsExpiresAt: credentials.expiration,
+          bedrockConnectionMethod: "sso", // Ensure SSO mode is active
           updatedAt: new Date(),
         })
         .where(eq(claudeCodeSettings.id, "default"))
         .run()
+
+      // Validate credentials immediately (decrypt first since getRoleCredentials returns encrypted values)
+      try {
+        const { STSClient, GetCallerIdentityCommand } = await import("@aws-sdk/client-sts")
+        const stsClient = new STSClient({
+          region: settings.ssoRegion || "us-east-1",
+          credentials: {
+            accessKeyId: decrypt(credentials.accessKeyId),
+            secretAccessKey: decrypt(credentials.secretAccessKey),
+            sessionToken: decrypt(credentials.sessionToken),
+          },
+        })
+        await stsClient.send(new GetCallerIdentityCommand({}))
+        console.log("[aws-sso] Credentials validated successfully")
+      } catch (validationError: any) {
+        console.error("[aws-sso] Credential validation failed:", validationError)
+        throw new Error(`Credentials saved but validation failed: ${validationError.message}`)
+      }
 
       return {
         success: true,
         expiresAt: credentials.expiration.toISOString(),
       }
     }),
+
+  /**
+   * Validate SSO credentials using STS GetCallerIdentity
+   */
+  validateSsoCredentials: publicProcedure.mutation(async () => {
+    const db = getDatabase()
+    const settings = db
+      .select()
+      .from(claudeCodeSettings)
+      .where(eq(claudeCodeSettings.id, "default"))
+      .get()
+
+    if (!settings?.awsAccessKeyId || !settings?.awsSecretAccessKey) {
+      throw new Error("No AWS credentials configured")
+    }
+
+    // Check expiration
+    if (settings.awsCredentialsExpiresAt && settings.awsCredentialsExpiresAt < new Date()) {
+      throw new Error("AWS credentials expired")
+    }
+
+    try {
+      // Decrypt credentials
+      const credentials = {
+        accessKeyId: decrypt(settings.awsAccessKeyId),
+        secretAccessKey: decrypt(settings.awsSecretAccessKey),
+        sessionToken: settings.awsSessionToken ? decrypt(settings.awsSessionToken) : undefined,
+      }
+
+      // Test with STS GetCallerIdentity
+      const { STSClient, GetCallerIdentityCommand } = await import("@aws-sdk/client-sts")
+      const stsClient = new STSClient({
+        region: settings.ssoRegion || "us-east-1",
+        credentials,
+      })
+
+      const result = await stsClient.send(new GetCallerIdentityCommand({}))
+
+      return {
+        valid: true,
+        accountId: result.Account,
+        userId: result.UserId,
+        arn: result.Arn,
+      }
+    } catch (error: any) {
+      console.error("[aws-sso] Credential validation failed:", error)
+      return {
+        valid: false,
+        error: error.message || "Failed to validate credentials",
+      }
+    }
+  }),
 
   /**
    * Get current SSO status
@@ -428,6 +499,7 @@ export const awsSsoRouter = router({
         awsSecretAccessKey: null,
         awsSessionToken: null,
         awsCredentialsExpiresAt: null,
+        bedrockConnectionMethod: "profile", // Reset to profile mode
         updatedAt: new Date(),
       })
       .where(eq(claudeCodeSettings.id, "default"))

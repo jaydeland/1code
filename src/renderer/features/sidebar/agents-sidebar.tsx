@@ -23,7 +23,6 @@ import {
   showOfflineModeFeaturesAtom,
   showWorkspaceIconAtom,
 } from "../../lib/atoms"
-import { ArchivePopover } from "../agents/ui/archive-popover"
 import { WorkflowsSidebarSection } from "../workflows/ui/workflows-sidebar-section"
 import { McpSidebarSection } from "../mcp/ui/mcp-sidebar-section"
 import { ClustersSidebarSection, selectedClustersCategoryAtom } from "../clusters"
@@ -90,7 +89,6 @@ import {
   selectedDraftIdAtom,
   loadingSubChatsAtom,
   agentsUnseenChangesAtom,
-  archivePopoverOpenAtom,
   agentsDebugModeAtom,
   selectedProjectAtom,
   justCreatedIdsAtom,
@@ -953,49 +951,6 @@ const ArchiveButton = memo(forwardRef<HTMLButtonElement, React.ButtonHTMLAttribu
     )
   }
 ))
-
-// Isolated Archive Section - subscribes to archivePopoverOpenAtom internally
-// to prevent sidebar re-renders when popover opens/closes
-interface ArchiveSectionProps {
-  archivedChatsCount: number
-}
-
-const ArchiveSection = memo(function ArchiveSection({ archivedChatsCount }: ArchiveSectionProps) {
-  const archivePopoverOpen = useAtomValue(archivePopoverOpenAtom)
-  const [blockArchiveTooltip, setBlockArchiveTooltip] = useState(false)
-  const prevArchivePopoverOpen = useRef(false)
-  const archiveButtonRef = useRef<HTMLButtonElement>(null)
-
-  // Handle tooltip blocking when popover closes
-  useEffect(() => {
-    if (prevArchivePopoverOpen.current && !archivePopoverOpen) {
-      archiveButtonRef.current?.blur()
-      setBlockArchiveTooltip(true)
-      const timer = setTimeout(() => setBlockArchiveTooltip(false), 300)
-      prevArchivePopoverOpen.current = archivePopoverOpen
-      return () => clearTimeout(timer)
-    }
-    prevArchivePopoverOpen.current = archivePopoverOpen
-  }, [archivePopoverOpen])
-
-  if (archivedChatsCount === 0) return null
-
-  return (
-    <Tooltip
-      delayDuration={500}
-      open={archivePopoverOpen || blockArchiveTooltip ? false : undefined}
-    >
-      <TooltipTrigger asChild>
-        <div>
-          <ArchivePopover
-            trigger={<ArchiveButton ref={archiveButtonRef} />}
-          />
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>Archive</TooltipContent>
-    </Tooltip>
-  )
-})
 
 // Isolated Sidebar Header - contains dropdown, traffic lights, close button
 // Subscribes to dropdown state internally to prevent sidebar re-renders
@@ -2550,9 +2505,6 @@ export function AgentsSidebar({
 
                 {/* Help Button - isolated component to prevent sidebar re-renders */}
                 <HelpSection isMobile={isMobileFullscreen} />
-
-                {/* Archive Button - isolated component to prevent sidebar re-renders */}
-                <ArchiveSection archivedChatsCount={archivedChatsCount} />
               </div>
 
               <div className="flex-1" />

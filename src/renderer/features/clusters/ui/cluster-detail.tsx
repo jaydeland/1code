@@ -24,7 +24,7 @@ import {
 } from "../../../components/ui/alert-dialog"
 import { ClusterTabs } from "./cluster-tabs"
 import { DashboardTab } from "./dashboard-tab"
-import { NodesTab } from "./nodes-tab"
+import { PvcTab } from "./pvc-tab"
 import { PodsTab } from "./pods-tab"
 import { ServicesTab } from "./services-tab"
 import { DeploymentsTab } from "./deployments-tab"
@@ -289,7 +289,7 @@ export function ClusterDetail() {
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
         {selectedTab === "dashboard" && <DashboardTab />}
-        {selectedTab === "nodes" && <NodesTab />}
+        {selectedTab === "pvcs" && <PvcTab />}
         {selectedTab === "pods" && <PodsTab />}
         {selectedTab === "services" && <ServicesTab />}
         {selectedTab === "deployments" && <DeploymentsTab />}

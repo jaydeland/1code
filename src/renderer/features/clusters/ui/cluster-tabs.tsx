@@ -1,13 +1,13 @@
 "use client"
 
 import { useAtom } from "jotai"
-import { LayoutDashboard, Server, ScrollText, Box, Network, Rocket } from "lucide-react"
+import { LayoutDashboard, HardDrive, ScrollText, Box, Network, Rocket } from "lucide-react"
 import { cn } from "../../../lib/utils"
 import { selectedClusterTabAtom, type ClusterTab } from "../atoms"
 
 const tabs: { id: ClusterTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "nodes", label: "Nodes", icon: Server },
+  { id: "pvcs", label: "PVC Details", icon: HardDrive },
   { id: "pods", label: "Pods", icon: Box },
   { id: "services", label: "Services", icon: Network },
   { id: "deployments", label: "Deployments", icon: Rocket },

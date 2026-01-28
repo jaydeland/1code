@@ -42,6 +42,9 @@ export function AgentsClaudeCodeTab() {
   const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("")
   const [vpnCheckEnabled, setVpnCheckEnabled] = useState(false)
   const [vpnCheckUrl, setVpnCheckUrl] = useState("")
+  // AWS connection method state
+  const [connectionMethod, setConnectionMethod] = useState<"sso" | "profile">("sso")
+  const [awsProfileName, setAwsProfileName] = useState("")
   const { trigger: triggerHaptic } = useHaptic()
 
   const utils = trpc.useUtils()
@@ -155,6 +158,8 @@ export function AgentsClaudeCodeTab() {
       setAnthropicBaseUrl(claudeSettings.anthropicBaseUrl || "")
       setVpnCheckEnabled(claudeSettings.vpnCheckEnabled || false)
       setVpnCheckUrl(claudeSettings.vpnCheckUrl || "")
+      setConnectionMethod(claudeSettings.bedrockConnectionMethod || "sso")
+      setAwsProfileName(claudeSettings.awsProfileName || "")
       // Don't set API key from masked value - user needs to enter it
     }
   }, [claudeSettings])
@@ -359,12 +364,18 @@ export function AgentsClaudeCodeTab() {
                 onVpnCheckEnabledChange={setVpnCheckEnabled}
                 vpnCheckUrl={vpnCheckUrl}
                 onVpnCheckUrlChange={setVpnCheckUrl}
+                connectionMethod={connectionMethod}
+                onConnectionMethodChange={setConnectionMethod}
+                awsProfileName={awsProfileName}
+                onAwsProfileNameChange={setAwsProfileName}
                 onSave={() => {
                   updateSettings.mutate({
                     authMode,
                     bedrockRegion,
                     vpnCheckEnabled,
                     vpnCheckUrl,
+                    bedrockConnectionMethod: connectionMethod,
+                    awsProfileName: connectionMethod === "profile" ? awsProfileName : null,
                   })
                 }}
                 isSaving={updateSettings.isPending}

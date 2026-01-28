@@ -60,6 +60,7 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
   const [expandedNodes, setExpandedNodes] = useAtom(sessionFlowExpandedNodesAtom)
   const reactFlowInstance = useReactFlow()
   const previousNodeCountRef = useRef(0)
+  const previousExpandedSizeRef = useRef(0)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
 
   // Handle node click - scroll to message
@@ -99,19 +100,30 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
     })
 
     const nodeCountChanged = newNodes.length !== previousNodeCountRef.current
+    const expandedSizeChanged = expandedNodes.size !== previousExpandedSizeRef.current
     previousNodeCountRef.current = newNodes.length
+    previousExpandedSizeRef.current = expandedNodes.size
 
     setNodes(newNodes)
     setEdges(newEdges)
 
-    // Auto-scroll to bottom when new nodes are added (but only if user hasn't manually scrolled)
-    if (nodeCountChanged && newNodes.length > 0 && !userScrolled) {
+    // Auto-adjust view when new nodes are added or expansion changes (but only if user hasn't manually scrolled)
+    if ((nodeCountChanged || expandedSizeChanged) && newNodes.length > 0 && !userScrolled) {
       // Delay to allow nodes to render
       setTimeout(() => {
+        // Find the bottom-most nodes (highest Y position) to focus on
+        const maxY = Math.max(...newNodes.map(n => n.position.y))
+        const bottomNodes = newNodes.filter(n => n.position.y >= maxY - 100)
+
+        // Fit view to show full width of all nodes, but focus vertically on bottom nodes
         reactFlowInstance.fitView({
           padding: 0.2,
           duration: 400,
-          nodes: [newNodes[newNodes.length - 1]], // Focus on last node
+          // Include bottom nodes to ensure we scroll to bottom, but fitView will
+          // adjust to show the full width of the entire graph
+          nodes: bottomNodes.length > 0 ? bottomNodes : undefined,
+          minZoom: 0.3,
+          maxZoom: 1.2,
         })
       }, 100)
     }

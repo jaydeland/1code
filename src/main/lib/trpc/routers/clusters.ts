@@ -6,6 +6,7 @@ import { exec } from "child_process"
 import { promisify } from "util"
 import { eq } from "drizzle-orm"
 import { router, publicProcedure } from "../index"
+import { observable } from "@trpc/server/observable"
 import { getDatabase, claudeCodeSettings } from "../../db"
 import { EksService, type EksClusterSummary, type EksClusterInfo } from "../../aws/eks-service"
 import {
@@ -20,6 +21,8 @@ import {
   checkMetricsAvailable,
   listNodeMetrics,
   listPodMetrics,
+  streamPodLogs,
+  getAuthOpts,
   type K8sNode,
   type K8sNamespace,
   type K8sPod,
@@ -28,6 +31,7 @@ import {
   type K8sPvc,
   type NodeMetric,
   type PodMetric,
+  type LogEntry,
 } from "../../kubernetes/kubernetes-service"
 import { decrypt, type AwsCredentials } from "../../aws/sso-service"
 
@@ -572,5 +576,155 @@ export const clustersRouter = router({
       const k8sClient = createK8sClient(cluster, token)
 
       return await listPodMetrics(k8sClient, input.namespace)
+    }),
+
+  /**
+   * Stream logs from pods in a namespace
+   */
+  streamLogs: publicProcedure
+    .input(
+      z.object({
+        clusterName: z.string(),
+        namespace: z.string(),
+        services: z.array(z.string()),
+        excludeIstioSidecar: z.boolean().default(true),
+      })
+    )
+    .subscription(({ input }) => {
+      return observable<LogEntry>((emit) => {
+        let cleanup: (() => void) | null = null
+
+        const startStreaming = async () => {
+          try {
+            const db = getDatabase()
+            const settings = db
+              .select()
+              .from(claudeCodeSettings)
+              .where(eq(claudeCodeSettings.id, "default"))
+              .get()
+
+            const region = settings?.bedrockRegion || "us-east-1"
+            const eksService = getEksService(region)
+
+            if (!eksService) {
+              emit.error(new Error("No AWS credentials available"))
+              return
+            }
+
+            // Get cluster and create K8s client
+            const cluster = await eksService.describeCluster(input.clusterName)
+            const token = await eksService.generateToken(input.clusterName)
+            const k8sClient = createK8sClient(cluster, token)
+
+            // Get all pods in the namespace
+            const allPods = await listPods(k8sClient, input.namespace)
+
+            // Get service details to match pods by labels
+            const services = await listServices(k8sClient, input.namespace)
+            const selectedServiceObjs = services.filter(svc =>
+              input.services.includes(svc.name)
+            )
+
+            // Collect all pods that match any of the selected services
+            const servicePods: typeof allPods = []
+            const serviceLabels = new Map<string, Record<string, string>>()
+
+            for (const serviceName of input.services) {
+              // Try to get the service from the cluster to extract label selectors
+              try {
+                const svcResponse = await k8sClient.readCoreV1NamespacedService(
+                  { path: { name: serviceName, namespace: input.namespace } },
+                  getAuthOpts(k8sClient)
+                )
+
+                const selector = svcResponse.spec?.selector || {}
+                if (Object.keys(selector).length > 0) {
+                  serviceLabels.set(serviceName, selector)
+                }
+              } catch (error) {
+                console.warn(`[clusters] Could not get service ${serviceName}:`, error)
+                // Fall back to name-based matching for this service
+              }
+            }
+
+            // Filter pods by service label selectors
+            for (const pod of allPods) {
+              const podLabels = pod.metadata?.labels || {}
+              let podMatched = false
+
+              // Check if pod matches any service's label selector
+              for (const [serviceName, selector] of serviceLabels) {
+                const matches = Object.entries(selector).every(([key, value]) =>
+                  podLabels[key] === value
+                )
+
+                if (matches) {
+                  servicePods.push(pod)
+                  podMatched = true
+                  break
+                }
+              }
+
+              // Fallback: also check name prefix for services without selectors
+              if (!podMatched) {
+                const matchesByName = input.services.some(svc =>
+                  pod.name.startsWith(svc) || pod.name.startsWith(`${svc}-`)
+                )
+                if (matchesByName) {
+                  servicePods.push(pod)
+                }
+              }
+            }
+
+            console.log(`[clusters] Found ${servicePods.length} pods matching services ${input.services.join(", ")} (out of ${allPods.length} total pods)`)
+
+            if (servicePods.length === 0) {
+              const errorMsg = `No pods found for services: ${input.services.join(", ")}. ` +
+                `Make sure the services exist and have running pods in namespace "${input.namespace}". ` +
+                `Available services: ${services.map(s => s.name).join(", ")}`
+              console.warn("[clusters]", errorMsg)
+              emit.error(new Error(errorMsg))
+              return
+            }
+
+            const podNames = servicePods.map((p) => p.name)
+
+            console.log(`[clusters] Starting log stream for ${podNames.length} pods: ${podNames.join(", ")}`)
+
+            // Start streaming logs
+            cleanup = streamPodLogs(
+              k8sClient,
+              input.namespace,
+              podNames,
+              input.excludeIstioSidecar,
+              (log) => {
+                emit.next(log)
+              },
+              (error) => {
+                console.error("[clusters] Log stream error:", error)
+                emit.error(error)
+              }
+            )
+          } catch (error) {
+            console.error("[clusters] Failed to start log streaming:", error)
+            emit.error(
+              error instanceof Error
+                ? error
+                : new Error("Failed to start log streaming")
+            )
+          }
+        }
+
+        // Start streaming
+        startStreaming()
+
+        // Cleanup function
+        return () => {
+          console.log("[clusters] Stopping log stream")
+          if (cleanup) {
+            cleanup()
+          }
+        }
+      })
     }),
 })
