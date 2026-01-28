@@ -153,6 +153,17 @@ export function AgentsContent() {
     { enabled: !!selectedChatId },
   )
 
+  // Fetch start commands for the project - these run when a new terminal is created
+  const mobileProjectId = (chatData as any)?.project?.id as string | undefined
+  const { data: mobileStartCommandsData } = trpc.projects.getStartCommands.useQuery(
+    { id: mobileProjectId ?? "" },
+    { enabled: !!mobileProjectId },
+  )
+  const mobileStartCommands = useMemo(
+    () => mobileStartCommandsData?.commands ?? [],
+    [mobileStartCommandsData]
+  )
+
   // Track previous chat ID for navigation after archive
   const [previousChatId, setPreviousChatId] = useAtom(previousAgentChatIdAtom)
   const prevSelectedChatIdRef = useRef<string | null>(null)
@@ -770,6 +781,7 @@ export function AgentsContent() {
             workspaceId={selectedChatId}
             isMobileFullscreen={true}
             onClose={() => setMobileViewMode("chat")}
+            initialCommands={mobileStartCommands.length > 0 ? mobileStartCommands : undefined}
           />
         ) : (
           // Chat Mode - shows either ChatView or NewChatForm

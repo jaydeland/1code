@@ -9,6 +9,7 @@ import { AgentsLayout } from "./features/layout/agents-layout"
 import {
   AnthropicOnboardingPage,
   ApiKeyOnboardingPage,
+  AwsBedrockOnboardingPage,
   BillingMethodPage,
   SelectRepoPage,
 } from "./features/onboarding"
@@ -16,6 +17,7 @@ import { identify, initAnalytics, shutdown } from "./lib/analytics"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
+  awsBedrockOnboardingCompletedAtom,
   billingMethodAtom
 } from "./lib/atoms"
 import { appStore } from "./lib/jotai-store"
@@ -47,6 +49,7 @@ function AppContent() {
     anthropicOnboardingCompletedAtom
   )
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
+  const awsBedrockOnboardingCompleted = useAtomValue(awsBedrockOnboardingCompletedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
 
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
@@ -66,8 +69,11 @@ function AppContent() {
     if (!selectedProject) return null
     // While loading, trust localStorage value to prevent flicker
     if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projects) return null
+    // After loading, validate against DB - but be lenient
+    if (!projects || projects.length === 0) {
+      // If projects list is empty or not loaded, trust the selected project
+      return selectedProject
+    }
     const exists = projects.some((p) => p.id === selectedProject.id)
     return exists ? selectedProject : null
   }, [selectedProject, projects, isLoadingProjects])
@@ -76,8 +82,9 @@ function AppContent() {
   // 1. No billing method selected -> BillingMethodPage
   // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
   // 3. API key or custom model selected but not completed -> ApiKeyOnboardingPage
-  // 4. No valid project selected -> SelectRepoPage
-  // 5. Otherwise -> AgentsLayout
+  // 4. AWS Bedrock selected but not completed -> AwsBedrockOnboardingPage
+  // 5. No valid project selected -> SelectRepoPage
+  // 6. Otherwise -> AgentsLayout
   if (!billingMethod) {
     return <BillingMethodPage />
   }
@@ -91,6 +98,10 @@ function AppContent() {
     !apiKeyOnboardingCompleted
   ) {
     return <ApiKeyOnboardingPage />
+  }
+
+  if (billingMethod === "aws-bedrock" && !awsBedrockOnboardingCompleted) {
+    return <AwsBedrockOnboardingPage />
   }
 
   if (!validatedProject && !isLoadingProjects) {

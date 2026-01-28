@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   FolderOpen,
@@ -57,7 +57,54 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   // Fetch all chats (we'll group them by project client-side)
   const { data: allChats, isLoading: isLoadingChats } = trpc.chats.list.useQuery({})
 
+  // Debug: log data loading
+  useEffect(() => {
+    console.log('[WorkspacesTab] Data state:', JSON.stringify({
+      projectsCount: projects?.length,
+      chatsCount: allChats?.length,
+      isLoadingProjects,
+      isLoadingChats,
+    }))
+  }, [projects, allChats, isLoadingProjects, isLoadingChats])
+
   const utils = trpc.useUtils()
+
+  // Open folder mutation for "New Workspace" button
+  const openFolderMutation = trpc.projects.openFolder.useMutation({
+    onSuccess: (project) => {
+      console.log('[WorkspacesTab] openFolder success:', project)
+      if (project) {
+        // Optimistically update the projects list cache
+        utils.projects.list.setData(undefined, (oldData) => {
+          if (!oldData) return [project]
+          const exists = oldData.some((p) => p.id === project.id)
+          if (exists) {
+            return oldData.map((p) =>
+              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+            )
+          }
+          return [project, ...oldData]
+        })
+
+        // Select the new project
+        setSelectedProject({
+          id: project.id,
+          name: project.name,
+          path: project.path,
+          gitRemoteUrl: project.gitRemoteUrl,
+          gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
+          gitOwner: project.gitOwner,
+          gitRepo: project.gitRepo,
+        })
+
+        // Expand the new project in the tree
+        setExpandedWorkspaceIds((prev) => new Set([...prev, project.id]))
+      }
+    },
+    onError: (error) => {
+      console.error('[WorkspacesTab] openFolder error:', error)
+    },
+  })
 
   // Archive mutation
   const archiveMutation = trpc.chats.archive.useMutation({
@@ -112,9 +159,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
       pinnedIds.add(chatId)
     }
     localStorage.setItem(`agent-pinned-chats-${projectId}`, JSON.stringify(Array.from(pinnedIds)))
-    // Trigger re-render
-    utils.agents.listChats.invalidate()
-  }, [getPinnedChatIds, utils.agents.listChats])
+    // Trigger re-render by invalidating chats list
+    utils.chats.list.invalidate()
+  }, [getPinnedChatIds, utils.chats.list])
 
   // Toggle workspace expansion
   const toggleWorkspaceExpanded = useCallback((workspaceId: string) => {
@@ -132,7 +179,15 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     // Set the project and chat
     const project = projects?.find(p => p.id === projectId)
     if (project) {
-      setSelectedProject(project)
+      setSelectedProject({
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        gitRemoteUrl: project.gitRemoteUrl,
+        gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
+        gitOwner: project.gitOwner,
+        gitRepo: project.gitRepo,
+      })
     }
     setSelectedChatId(chat.id)
     setSelectedDraftId(null)
@@ -147,16 +202,35 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
 
   // Handle workspace click
   const handleWorkspaceClick = useCallback((workspace: any) => {
+    console.log('[WorkspacesTab] Workspace clicked:', workspace.id, workspace.name)
     toggleWorkspaceExpanded(workspace.id)
     // Also set as selected project
-    setSelectedProject(workspace)
+    const projectToSet = {
+      id: workspace.id,
+      name: workspace.name,
+      path: workspace.path,
+      gitRemoteUrl: workspace.gitRemoteUrl,
+      gitProvider: workspace.gitProvider as "github" | "gitlab" | "bitbucket" | null,
+      gitOwner: workspace.gitOwner,
+      gitRepo: workspace.gitRepo,
+    }
+    console.log('[WorkspacesTab] Setting selectedProject:', projectToSet)
+    setSelectedProject(projectToSet)
   }, [toggleWorkspaceExpanded, setSelectedProject])
 
   // Handle new chat
   const handleNewChat = useCallback((workspaceId: string) => {
     const project = projects?.find(p => p.id === workspaceId)
     if (project) {
-      setSelectedProject(project)
+      setSelectedProject({
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        gitRemoteUrl: project.gitRemoteUrl,
+        gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
+        gitOwner: project.gitOwner,
+        gitRepo: project.gitRepo,
+      })
     }
     setSelectedChatId(null)
     setSelectedDraftId(null)
@@ -254,20 +328,19 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
           variant="outline"
           size="sm"
           className="w-full justify-start gap-2 h-8 text-xs"
-          onClick={() => {
-            // TODO: Open folder dialog or show workspace creation UI
-            window.desktopApi.showOpenDialog({
-              title: "Select Project Folder",
-              properties: ["openDirectory"],
-            }).then((result) => {
-              if (result && result.length > 0) {
-                // This would trigger project creation
-              }
-            })
+          onClick={async () => {
+            console.log('[WorkspacesTab] New Workspace clicked')
+            try {
+              const result = await openFolderMutation.mutateAsync()
+              console.log('[WorkspacesTab] New Workspace result:', result)
+            } catch (error) {
+              console.error('[WorkspacesTab] New Workspace error:', error)
+            }
           }}
+          disabled={openFolderMutation.isPending}
         >
           <FolderPlus className="h-3.5 w-3.5" />
-          New Workspace
+          {openFolderMutation.isPending ? "Adding..." : "New Workspace"}
         </Button>
       </div>
 

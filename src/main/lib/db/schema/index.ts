@@ -20,6 +20,9 @@ export const projects = sqliteTable("projects", {
   gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | null
   gitOwner: text("git_owner"),
   gitRepo: text("git_repo"),
+  // Terminal start commands - JSON array of commands to run when a new chat terminal is created
+  // These commands run in the persistent PTY shell session after the prompt is ready
+  startCommands: text("start_commands").notNull().default("[]"),
 })
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -183,7 +186,9 @@ export const configSources = sqliteTable("config_sources", {
 })
 
 // ============ BACKGROUND TASKS ============
-// Tracks background tasks started by Claude via Bash tool with run_in_background: true
+// Tracks minimal essential data for background tasks started by Claude
+// All display data (command, description, status, exitCode, timestamps) is derived from messages
+// This table only stores what cannot be derived: outputFile paths and PIDs
 export const backgroundTasks = sqliteTable("background_tasks", {
   id: text("id")
     .primaryKey()
@@ -194,19 +199,9 @@ export const backgroundTasks = sqliteTable("background_tasks", {
   chatId: text("chat_id")
     .notNull()
     .references(() => chats.id, { onDelete: "cascade" }),
-  toolCallId: text("tool_call_id").notNull(), // Links to the Bash tool call
-  command: text("command").notNull(), // The command that was run
-  description: text("description"), // Optional description from Claude
-  outputFile: text("output_file"), // Path to output file (from Bash tool)
-  status: text("status", { enum: ["running", "completed", "failed", "unknown"] })
-    .notNull()
-    .default("running"),
-  exitCode: integer("exit_code"), // Exit code when completed
-  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  completedAt: integer("completed_at", { mode: "timestamp" }),
-  pid: integer("pid"), // Process ID if known
+  toolCallId: text("tool_call_id").notNull().unique(), // Links to the Bash tool call in messages
+  outputFile: text("output_file"), // Path to output file for reading large logs
+  pid: integer("pid"), // Process ID for checking if process is still running
 })
 
 export const backgroundTasksRelations = relations(backgroundTasks, ({ one }) => ({

@@ -62,7 +62,6 @@ import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
 import {
   AgentsSlashCommand,
-  COMMAND_PROMPTS,
   BUILTIN_SLASH_COMMANDS,
   type SlashCommandOption,
 } from "../commands"
@@ -178,9 +177,29 @@ export function NewChatForm({
   const [lastSelectedRepo, setLastSelectedRepo] = useAtom(lastSelectedRepoAtom)
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
 
+  // Debug: log selectedProject state
+  useEffect(() => {
+    console.log('[NewChatForm] selectedProject atom value:', JSON.stringify({
+      hasValue: !!selectedProject,
+      id: selectedProject?.id,
+      name: selectedProject?.name,
+    }))
+  }, [selectedProject])
+
   // Fetch projects to validate selectedProject exists
   const { data: projectsList, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
+
+  // Debug: log projects list state
+  useEffect(() => {
+    console.log('[NewChatForm] Projects list state:', JSON.stringify({
+      isLoading: isLoadingProjects,
+      projectsCount: projectsList?.length,
+      selectedProjectId: selectedProject?.id,
+      selectedProjectName: selectedProject?.name,
+      hasSelectedProject: !!selectedProject,
+    }))
+  }, [projectsList, isLoadingProjects, selectedProject])
 
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
@@ -188,18 +207,25 @@ export function NewChatForm({
     if (!selectedProject) return null
     // While loading, trust localStorage value to prevent flicker
     if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projectsList) return null
+    // After loading, validate against DB - but be lenient
+    if (!projectsList || projectsList.length === 0) {
+      // If projects list is empty, trust the selected project
+      return selectedProject
+    }
     const exists = projectsList.some((p) => p.id === selectedProject.id)
     return exists ? selectedProject : null
   }, [selectedProject, projectsList, isLoadingProjects])
 
-  // Clear invalid project from storage
-  useEffect(() => {
-    if (selectedProject && projectsList && !validatedProject) {
-      setSelectedProject(null)
-    }
-  }, [selectedProject, projectsList, validatedProject, setSelectedProject])
+  // DISABLED: Clear invalid project from storage
+  // This was causing issues where projects would be cleared incorrectly
+  // TODO: Re-enable with better validation logic
+  // useEffect(() => {
+  //   if (selectedProject && projectsList && projectsList.length > 0 && !validatedProject) {
+  //     console.log('[NewChatForm] Clearing invalid project:', selectedProject)
+  //     console.log('[NewChatForm] projectsList:', projectsList)
+  //     setSelectedProject(null)
+  //   }
+  // }, [selectedProject, projectsList, validatedProject, setSelectedProject])
   const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(
     lastSelectedAgentIdAtom,
   )
@@ -268,9 +294,9 @@ export function NewChatForm({
   }
 
   const handleFillWithAi = async () => {
-    const prompt = COMMAND_PROMPTS["worktree-setup"]
-    if (!prompt || !validatedProject) return
+    if (!validatedProject) return
 
+    const prompt = "Generate a git worktree configuration for managing isolated development branches. Include recommended settings for branch prefix, cleanup policy, and any other best practices for git worktree usage in a development workflow."
     const result = await queryAi(prompt, { model: "haiku" })
 
     if (result.success && result.text) {
@@ -1027,11 +1053,8 @@ export function NewChatForm({
           case "release-notes":
           case "security-review":
           case "worktree-setup": {
-            const prompt =
-              COMMAND_PROMPTS[command.name as keyof typeof COMMAND_PROMPTS]
-            if (prompt) {
-              handleSlashCommandWithAi(command.name, prompt)
-            }
+            // These commands are now handled natively by the SDK
+            // No action needed here - SDK will process them
             break
           }
         }
@@ -1170,7 +1193,14 @@ export function NewChatForm({
           )}
 
           {/* Input Area or Select Repo State */}
-          {!validatedProject ? (
+          {(() => {
+            console.log('[NewChatForm] RENDER: selectedProject check:', JSON.stringify({
+              hasSelectedProject: !!selectedProject,
+              selectedProjectId: selectedProject?.id,
+              willShowSelector: !selectedProject
+            }))
+            return !selectedProject
+          })() ? (
             // No project selected - show select repo button (like Sign in button)
             <div className="flex justify-center">
               <button

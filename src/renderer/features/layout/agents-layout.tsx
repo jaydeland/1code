@@ -117,22 +117,24 @@ export function AgentsLayout() {
   }, [selectedProject, projects, isLoadingProjects])
 
   // Clear invalid project from storage (only after loading completes)
-  useEffect(() => {
-    if (
-      selectedProject &&
-      projects &&
-      !isLoadingProjects &&
-      !validatedProject
-    ) {
-      setSelectedProject(null)
-    }
-  }, [
-    selectedProject,
-    projects,
-    isLoadingProjects,
-    validatedProject,
-    setSelectedProject,
-  ])
+  // DISABLED: This validation was too aggressive and kept clearing valid projects
+  // TODO: Re-enable with better logic that doesn't clear on every render
+  // useEffect(() => {
+  //   if (
+  //     selectedProject &&
+  //     projects &&
+  //     !isLoadingProjects &&
+  //     !validatedProject
+  //   ) {
+  //     setSelectedProject(null)
+  //   }
+  // }, [
+  //   selectedProject,
+  //   projects,
+  //   isLoadingProjects,
+  //   validatedProject,
+  //   setSelectedProject,
+  // ])
 
   // Hide native traffic lights - we use custom traffic lights in the tab bar area
   useEffect(() => {

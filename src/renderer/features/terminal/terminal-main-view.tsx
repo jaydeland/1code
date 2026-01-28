@@ -53,8 +53,20 @@ export function TerminalMainView() {
     { enabled: !!selectedChatId }
   )
   const worktreePath = chatData?.worktreePath as string | undefined
-  // Terminals always start in user's $HOME directory
-  const cwd = undefined // Will default to $HOME in terminal session
+
+  // Fetch start commands for the selected project
+  // These commands run when a new terminal is created for this project
+  const { data: startCommandsData } = trpc.projects.getStartCommands.useQuery(
+    { id: selectedProject?.id ?? "" },
+    { enabled: !!selectedProject?.id }
+  )
+  const startCommands = useMemo(
+    () => startCommandsData?.commands ?? [],
+    [startCommandsData]
+  )
+
+  // Terminals start in workspace directory (worktree path or project path)
+  const cwd = worktreePath || selectedProject?.path
   const terminalContextId = selectedChatId || GLOBAL_TERMINAL_ID
   const terminalBg = useMemo(() => {
     if (fullThemeData?.colors?.["terminal.background"]) return fullThemeData.colors["terminal.background"]
@@ -131,12 +143,18 @@ export function TerminalMainView() {
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <div className="flex items-center gap-1 px-2 py-1.5 flex-shrink-0 border-b border-border/50" style={{ backgroundColor: terminalBg }}>
-        <TerminalTabs terminals={terminals} activeTerminalId={activeTerminalId} cwds={{}} initialCwd={undefined} terminalBg={terminalBg} onSelectTerminal={selectTerminal} onCloseTerminal={closeTerminal} onCloseOtherTerminals={closeOtherTerminals} onCloseTerminalsToRight={closeTerminalsToRight} onCreateTerminal={createTerminal} onRenameTerminal={renameTerminal} />
+        <TerminalTabs terminals={terminals} activeTerminalId={activeTerminalId} cwds={{}} initialCwd={cwd} terminalBg={terminalBg} onSelectTerminal={selectTerminal} onCloseTerminal={closeTerminal} onCloseOtherTerminals={closeOtherTerminals} onCloseTerminalsToRight={closeTerminalsToRight} onCreateTerminal={createTerminal} onRenameTerminal={renameTerminal} />
       </div>
       <div className="flex-1 min-h-0 min-w-0 overflow-hidden" style={{ backgroundColor: terminalBg }}>
         {activeTerminal ? (
           <motion.div key={activeTerminal.paneId} className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0 }}>
-            <Terminal paneId={activeTerminal.paneId} cwd={cwd} workspaceId={terminalContextId} initialCwd={cwd} />
+            <Terminal
+              paneId={activeTerminal.paneId}
+              cwd={cwd}
+              workspaceId={terminalContextId}
+              initialCwd={cwd}
+              initialCommands={startCommands.length > 0 ? startCommands : undefined}
+            />
           </motion.div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">No terminal selected</div>

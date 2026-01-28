@@ -4185,6 +4185,18 @@ export function ChatView({
     { chatId },
     { enabled: !!chatId },
   )
+
+  // Fetch start commands for the project - these run when a new terminal is created
+  const projectId = (agentChat as any)?.project?.id as string | undefined
+  const { data: startCommandsData } = trpc.projects.getStartCommands.useQuery(
+    { id: projectId ?? "" },
+    { enabled: !!projectId },
+  )
+  const startCommands = useMemo(
+    () => startCommandsData?.commands ?? [],
+    [startCommandsData]
+  )
+
   const agentSubChats = (agentChat?.subChats ?? []) as Array<{
     id: string
     name?: string | null
@@ -4914,6 +4926,8 @@ Make sure to preserve all functionality from both branches when resolving confli
         messages,
         transport,
         onError: () => {
+          // Clear loading state on error
+          clearLoading(setLoadingSubChats, subChatId)
           // Sync status to global store on error (allows queue to continue)
           useStreamingStatusStore.getState().setStatus(subChatId, "ready")
         },
@@ -5069,6 +5083,8 @@ Make sure to preserve all functionality from both branches when resolving confli
         messages: [],
         transport,
         onError: () => {
+          // Clear loading state on error
+          clearLoading(setLoadingSubChats, newId)
           // Sync status to global store on error (allows queue to continue)
           useStreamingStatusStore.getState().setStatus(newId, "ready")
         },
@@ -5944,6 +5960,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           chatId={chatId}
           cwd={worktreePath || originalProjectPath || "~"}
           workspaceId={chatId}
+          initialCommands={startCommands.length > 0 ? startCommands : undefined}
         />
 
         {/* Session Flow Sidebar - shows session execution flow */}

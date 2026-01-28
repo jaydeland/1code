@@ -69,6 +69,7 @@ export const projectsRouter = router({
    * Open folder picker and create project
    */
   openFolder: publicProcedure.mutation(async ({ ctx }) => {
+    console.log('[Projects] openFolder called')
     const window = ctx.getWindow?.() ?? BrowserWindow.getFocusedWindow()
 
     if (!window) {
@@ -84,18 +85,23 @@ export const projectsRouter = router({
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
 
+    console.log('[Projects] Showing folder dialog...')
     const result = await dialog.showOpenDialog(window, {
       properties: ["openDirectory", "createDirectory"],
       title: "Select Project Folder",
       buttonLabel: "Open Project",
     })
 
+    console.log('[Projects] Dialog result:', { canceled: result.canceled, pathCount: result.filePaths.length })
+
     if (result.canceled || result.filePaths.length === 0) {
+      console.log('[Projects] Dialog canceled or no path selected')
       return null
     }
 
     const folderPath = result.filePaths[0]!
     const folderName = basename(folderPath)
+    console.log('[Projects] Selected folder:', { folderName, folderPath })
 
     // Get git remote info
     const gitInfo = await getGitRemoteInfo(folderPath)
@@ -373,6 +379,58 @@ export const projectsRouter = router({
       })
 
       return newProject
+    }),
+
+  /**
+   * Get start commands for a project
+   * Returns array of commands that run when a new chat terminal is created
+   */
+  getStartCommands: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, input.id))
+        .get()
+
+      if (!project) {
+        return { commands: [] }
+      }
+
+      try {
+        const commands = JSON.parse(project.startCommands || "[]") as string[]
+        return { commands: Array.isArray(commands) ? commands : [] }
+      } catch {
+        return { commands: [] }
+      }
+    }),
+
+  /**
+   * Update start commands for a project
+   * Commands are stored as JSON array and run when a new chat terminal is created
+   */
+  updateStartCommands: publicProcedure
+    .input(z.object({
+      id: z.string(),
+      commands: z.array(z.string()),
+    }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Filter out empty commands
+      const filteredCommands = input.commands.filter(cmd => cmd.trim())
+
+      return db
+        .update(projects)
+        .set({
+          startCommands: JSON.stringify(filteredCommands),
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, input.id))
+        .returning()
+        .get()
     }),
 
   /**

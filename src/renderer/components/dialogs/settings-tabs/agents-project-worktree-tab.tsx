@@ -24,7 +24,6 @@ import {
   AlertDialogTrigger,
 } from "../../ui/alert-dialog"
 import { toast } from "sonner"
-import { COMMAND_PROMPTS } from "../../../features/agents/commands"
 import {
   agentsSettingsDialogOpenAtom,
   selectedAgentChatIdAtom,
@@ -77,6 +76,24 @@ export function AgentsProjectWorktreeTab({
     },
   })
 
+  // Fetch start commands for the project
+  const { data: startCommandsData, refetch: refetchStartCommands } =
+    trpc.projects.getStartCommands.useQuery(
+      { id: projectId },
+      { enabled: !!projectId },
+    )
+
+  // Save start commands mutation
+  const saveStartCommandsMutation = trpc.projects.updateStartCommands.useMutation({
+    onSuccess: () => {
+      toast.success("Terminal start commands saved")
+      refetchStartCommands()
+    },
+    onError: (err) => {
+      toast.error(`Failed to save: ${err.message}`)
+    },
+  })
+
   // For "Fill with AI" - use background session
   const { queryAi, isLoading: isGenerating } = useAiQuery()
   const [showWorktreeAiModal, setShowWorktreeAiModal] = useState(false)
@@ -86,9 +103,9 @@ export function AgentsProjectWorktreeTab({
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
 
   const handleFillWithAi = async () => {
-    const prompt = COMMAND_PROMPTS["worktree-setup"]
-    if (!prompt || !projectId) return
+    if (!projectId) return
 
+    const prompt = "Generate a git worktree configuration for managing isolated development branches. Include recommended settings for branch prefix, cleanup policy, and any other best practices for git worktree usage in a development workflow."
     const result = await queryAi(prompt, { model: "haiku" })
 
     if (result.success && result.text) {
@@ -114,8 +131,8 @@ export function AgentsProjectWorktreeTab({
         }
         return current
       })
-      // Switch to account tab
-      setSettingsActiveTab("account")
+      // Switch to profile tab
+      setSettingsActiveTab("profile")
     },
     onError: (err) => {
       toast.error(`Failed to delete project: ${err.message}`)
@@ -131,6 +148,9 @@ export function AgentsProjectWorktreeTab({
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
   const [showPlatformSpecific, setShowPlatformSpecific] = useState(false)
   const [worktreeLocation, setWorktreeLocation] = useState<string>("")
+
+  // Terminal start commands state
+  const [startCommands, setStartCommands] = useState<string[]>([""])
 
   // Compute default worktree path for this project
   const computedDefault = useMemo(() => {
@@ -190,6 +210,14 @@ export function AgentsProjectWorktreeTab({
     }
   }, [configData])
 
+  // Sync start commands from server data
+  useEffect(() => {
+    if (startCommandsData) {
+      const cmds = startCommandsData.commands
+      setStartCommands(cmds.length > 0 ? [...cmds, ""] : [""])
+    }
+  }, [startCommandsData])
+
   const handleSave = () => {
     if (!projectId) return
 
@@ -216,6 +244,32 @@ export function AgentsProjectWorktreeTab({
       config,
       target: saveTarget,
     })
+  }
+
+  const handleSaveStartCommands = () => {
+    if (!projectId) return
+
+    const filteredCommands = startCommands.filter((c) => c.trim())
+    saveStartCommandsMutation.mutate({
+      id: projectId,
+      commands: filteredCommands,
+    })
+  }
+
+  // Helper functions for start commands
+  const updateStartCommand = (index: number, value: string) => {
+    const newList = [...startCommands]
+    newList[index] = value
+    setStartCommands(newList)
+  }
+
+  const removeStartCommand = (index: number) => {
+    if (startCommands.length <= 1) return
+    setStartCommands(startCommands.filter((_, i) => i !== index))
+  }
+
+  const addStartCommand = () => {
+    setStartCommands([...startCommands, ""])
   }
 
   const updateCommand = (
@@ -620,6 +674,71 @@ export function AgentsProjectWorktreeTab({
           }}
           showCopy={true}
         />
+      </div>
+
+      {/* Terminal Start Commands */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">
+            Terminal Start Commands
+          </h4>
+          <p className="text-xs text-muted-foreground mt-1">
+            Commands to run when a new chat terminal is opened for this project.
+            These run in the persistent shell session after the prompt is ready.
+          </p>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Commands</Label>
+              <span className="text-xs text-muted-foreground">
+                commands are joined with <code className="font-mono bg-muted px-1 py-0.5 rounded">&&</code>
+              </span>
+            </div>
+            <div className="space-y-2">
+              {startCommands.map((cmd, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    value={cmd}
+                    onChange={(e) => updateStartCommand(i, e.target.value)}
+                    placeholder="flox activate, nvm use, source .env"
+                    className="flex-1 font-mono text-sm"
+                  />
+                  {startCommands.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeStartCommand(i)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground"
+              onClick={addStartCommand}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add command
+            </Button>
+          </div>
+
+          <div className="bg-muted p-3 flex justify-end gap-2 border-t">
+            <Button
+              size="sm"
+              onClick={handleSaveStartCommands}
+              disabled={saveStartCommandsMutation.isPending}
+            >
+              {saveStartCommandsMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   )
