@@ -66,15 +66,17 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   const sdkCommands: SlashCommandOption[] = useMemo(() => {
     if (!sessionInfo?.slashCommands) return []
 
-    return sessionInfo.slashCommands.map((cmd) => ({
-      id: `sdk:${cmd.source}:${cmd.name}`,
-      name: cmd.name,
-      command: `/${cmd.name}`,
-      description: cmd.description,
-      category: "repository" as const,
-      argumentHint: cmd.argumentHint,
-      source: cmd.source,
-    }))
+    return sessionInfo.slashCommands
+      .filter((cmd) => cmd.name && typeof cmd.name === 'string')
+      .map((cmd) => ({
+        id: `sdk:${cmd.source}:${cmd.name}`,
+        name: cmd.name,
+        command: `/${cmd.name}`,
+        description: cmd.description,
+        category: "repository" as const,
+        argumentHint: cmd.argumentHint,
+        source: cmd.source,
+      }))
   }, [sessionInfo?.slashCommands])
 
   // Fallback: Fetch commands from filesystem if SDK hasn't provided them yet
@@ -90,15 +92,17 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   // Transform FileCommand to SlashCommandOption (fallback)
   const fallbackCommands: SlashCommandOption[] = useMemo(() => {
     if (sessionInfo?.slashCommands?.length) return [] // Use SDK commands if available
-    return fileCommands.map((cmd) => ({
-      id: `custom:${cmd.source}:${cmd.name}`,
-      name: cmd.name,
-      command: `/${cmd.name}`,
-      description: cmd.description || `Custom command from ${cmd.source}`,
-      category: "repository" as const,
-      path: cmd.path,
-      argumentHint: cmd.argumentHint,
-    }))
+    return fileCommands
+      .filter((cmd) => cmd.name && typeof cmd.name === 'string')
+      .map((cmd) => ({
+        id: `custom:${cmd.source}:${cmd.name}`,
+        name: cmd.name,
+        command: `/${cmd.name}`,
+        description: cmd.description || `Custom command from ${cmd.source}`,
+        category: "repository" as const,
+        path: cmd.path,
+        argumentHint: cmd.argumentHint,
+      }))
   }, [fileCommands, sessionInfo?.slashCommands])
 
   // Use SDK commands or fallback to filesystem commands
@@ -178,8 +182,8 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       const query = debouncedSearchText.toLowerCase()
       customFiltered = customCommands.filter(
         (cmd) =>
-          cmd.name.toLowerCase().includes(query) ||
-          cmd.command.toLowerCase().includes(query),
+          cmd.name?.toLowerCase().includes(query) ||
+          cmd.command?.toLowerCase().includes(query),
       )
     }
 
@@ -570,7 +574,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
               >
                 <span className="flex items-center gap-1 w-full min-w-0">
                   <span className="shrink-0 whitespace-nowrap font-medium">
-                    /{item.data.displayName || cmd.name}
+                    /{item.data.displayName || cmd.name || 'unknown'}
                   </span>
                   <span className="text-muted-foreground flex-1 min-w-0 ml-2 overflow-hidden text-[10px] truncate">
                     {cmd.description}
