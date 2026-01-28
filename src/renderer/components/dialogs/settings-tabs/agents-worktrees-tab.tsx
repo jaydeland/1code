@@ -13,7 +13,6 @@ import {
   SelectTrigger,
 } from "../../ui/select"
 import { toast } from "sonner"
-import { COMMAND_PROMPTS } from "../../../features/agents/commands"
 import {
   agentsSettingsDialogOpenAtom,
   selectedAgentChatIdAtom,
@@ -70,9 +69,9 @@ export function AgentsWorktreesTab() {
   const [aiGeneratedConfig, setAiGeneratedConfig] = useState("")
 
   const handleFillWithAi = async () => {
-    const prompt = COMMAND_PROMPTS["worktree-setup"]
-    if (!prompt || !selectedProjectId) return
+    if (!selectedProjectId) return
 
+    const prompt = "Generate worktree setup commands for this project. Include commands for installing dependencies, copying environment files, and any other necessary setup. Return only the commands as a JSON array."
     const result = await queryAi(prompt, { model: "haiku" })
 
     if (result.success && result.text) {
