@@ -48,6 +48,8 @@ import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { McpContent } from "../../mcp/ui/mcp-content"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { ClustersContent } from "../../clusters/ui/clusters-content"
+import { selectedGsdCategoryAtom } from "../../gsd/atoms"
+import { GsdContent } from "../../gsd/ui/gsd-content"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
 // Desktop mock
@@ -60,6 +62,7 @@ export function AgentsContent() {
   const selectedWorkflowCategory = useAtomValue(selectedWorkflowCategoryAtom)
   const selectedMcpCategory = useAtomValue(selectedMcpCategoryAtom)
   const selectedClustersCategory = useAtomValue(selectedClustersCategoryAtom)
+  const selectedGsdCategory = useAtomValue(selectedGsdCategoryAtom)
 
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
@@ -835,6 +838,11 @@ export function AgentsContent() {
     return <ClustersContent />
   }
 
+  // If GSD category is selected, show GSD view
+  if (selectedGsdCategory === "gsd") {
+    return <GsdContent />
+  }
+
   // If MCP category is selected, show MCP servers view
   if (selectedMcpCategory === "mcp") {
     return <McpContent />
@@ -880,6 +888,9 @@ export function AgentsContent() {
           ) : selectedSidebarTab === "clusters" ? (
             // Clusters tab - show clusters view
             <ClustersContent />
+          ) : selectedSidebarTab === "gsd" ? (
+            // GSD tab - show GSD view
+            <GsdContent />
           ) : (
             // For other tabs, show a placeholder detail view
             <div className="h-full flex items-center justify-center">
