@@ -417,50 +417,39 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
       {/* Header with section buttons */}
       <div className="flex items-center justify-between px-2 py-1.5">
         <div className="flex items-center gap-1 flex-1 min-w-0">
-          {/* Streaming indicator */}
-          {isStreaming && (
-            <span className="text-xs text-muted-foreground px-2">
-              {isCompacting ? "Compacting" : "Generating"}<AnimatedDots />
-            </span>
-          )}
-
-          {/* Section buttons */}
-          {!isStreaming && (
-            <>
-              <SectionButton
-                icon={FileCode}
-                label="Changes"
-                count={uncommittedFiles.length}
-                countDetail={changesDetail}
-                isActive={expandedSection === 'changes'}
-                onClick={() => handleSectionClick('changes')}
-              />
-              <SectionButton
-                icon={Terminal}
-                label="Tasks"
-                count={tasksTotal}
-                countDetail={tasksDetail}
-                isActive={expandedSection === 'tasks'}
-                onClick={() => handleSectionClick('tasks')}
-              />
-              <SectionButton
-                icon={Bot}
-                label="Agents"
-                count={agentsTotal}
-                countDetail={agentsDetail}
-                isActive={expandedSection === 'agents'}
-                onClick={() => handleSectionClick('agents')}
-              />
-              <SectionButton
-                icon={ListTodo}
-                label="Todos"
-                count={todosTotal}
-                countDetail={todosDetail}
-                isActive={expandedSection === 'todos'}
-                onClick={() => handleSectionClick('todos')}
-              />
-            </>
-          )}
+          {/* Section buttons - always show when there's data */}
+          <SectionButton
+            icon={FileCode}
+            label="Changes"
+            count={uncommittedFiles.length}
+            countDetail={changesDetail}
+            isActive={expandedSection === 'changes'}
+            onClick={() => handleSectionClick('changes')}
+          />
+          <SectionButton
+            icon={Terminal}
+            label="Tasks"
+            count={tasksTotal}
+            countDetail={tasksDetail}
+            isActive={expandedSection === 'tasks'}
+            onClick={() => handleSectionClick('tasks')}
+          />
+          <SectionButton
+            icon={Bot}
+            label="Agents"
+            count={agentsTotal}
+            countDetail={agentsDetail}
+            isActive={expandedSection === 'agents'}
+            onClick={() => handleSectionClick('agents')}
+          />
+          <SectionButton
+            icon={ListTodo}
+            label="Todos"
+            count={todosTotal}
+            countDetail={todosDetail}
+            isActive={expandedSection === 'todos'}
+            onClick={() => handleSectionClick('todos')}
+          />
         </div>
 
         {/* Right side: buttons */}

@@ -3608,7 +3608,7 @@ const ChatViewInner = memo(function ChatViewInner({
       {/* Stacked cards container - queue + status + session */}
       {!pendingQuestions && (
         <div className="px-2 -mb-6 relative z-10">
-          <div className="w-full max-w-2xl mx-auto px-2">
+          <div className="w-[90%] max-w-4xl mx-auto px-2">
             {/* Queue indicator card - top card */}
             {queue.length > 0 && (
               <AgentQueueIndicator
