@@ -404,7 +404,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
     ? agentsRunning > 0 ? `${agentsRunning} running` : `${agentsComplete} done`
     : undefined
   const todosDetail = todosTotal > 0
-    ? `${todosPending + todosRunning}/${todosTotal}`
+    ? `${todosComplete}/${todosTotal}`
     : undefined
 
   return (
