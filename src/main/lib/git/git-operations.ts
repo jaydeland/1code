@@ -500,6 +500,169 @@ export const createGitOperationsRouter = () => {
 				});
 			}),
 
+		mergeIntoLocalBranch: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					targetBranch: z.string(),
+					fastForwardOnly: z.boolean().optional().default(false),
+				}),
+			)
+			.mutation(
+				async ({ input }): Promise<{
+					success: boolean;
+					mergeType: "fast-forward" | "merge-commit" | "already-up-to-date";
+				}> => {
+					assertRegisteredWorktree(input.worktreePath);
+
+					return withGitLock(input.worktreePath, async () => {
+						const git = createGitForNetwork(input.worktreePath);
+
+						// Get current branch
+						const currentBranch = (
+							await git.revparse(["--abbrev-ref", "HEAD"])
+						).trim();
+
+						// Validation: cannot merge into itself
+						if (currentBranch === input.targetBranch) {
+							throw new Error(
+								"Cannot merge current branch into itself"
+							);
+						}
+
+						// Safety check: prevent merge with uncommitted changes
+						if (await hasUncommittedChanges(input.worktreePath)) {
+							throw new Error(
+								"Cannot merge with uncommitted changes. Please commit or stash your changes first."
+							);
+						}
+
+						// Check for ongoing rebase/merge
+						const repoState = await getRepositoryState(
+							input.worktreePath
+						);
+						if (repoState.isRebasing || repoState.isMerging) {
+							throw new Error(
+								"Cannot merge: another merge or rebase is in progress. Please complete or abort it first."
+							);
+						}
+
+						// Check if target branch is protected
+						if (
+							PROTECTED_BRANCHES.includes(input.targetBranch)
+						) {
+							throw new Error(
+								`Cannot merge into protected branch '${input.targetBranch}'. Protected branches: ${PROTECTED_BRANCHES.join(
+									", "
+								)}`
+							);
+						}
+
+						// Verify target branch exists locally
+						const branchSummary = await git.branch(["-a"]);
+						if (
+							!Object.keys(branchSummary.branches).includes(
+								input.targetBranch
+							)
+						) {
+							throw new Error(
+								`Target branch '${input.targetBranch}' does not exist locally`
+							);
+						}
+
+						let mergeType: "fast-forward" | "merge-commit" | "already-up-to-date" =
+							"merge-commit";
+
+						try {
+							// Switch to target branch
+							await withLockRetry(input.worktreePath, () =>
+								git.checkout(input.targetBranch)
+							);
+
+							// Merge current branch into target
+							const mergeArgs = [currentBranch, "--no-edit"];
+							if (input.fastForwardOnly) {
+								mergeArgs.push("--ff-only");
+							}
+
+							await withLockRetry(input.worktreePath, () =>
+								git.merge(mergeArgs)
+							);
+
+							// Determine merge type by checking if we're ahead
+							try {
+								const mergeBase = (
+									await git.raw([
+										"merge-base",
+										currentBranch,
+										input.targetBranch,
+									])
+								).trim();
+								const targetHead = (
+									await git.rev_parse("HEAD")
+								).trim();
+
+								if (mergeBase === targetHead) {
+									mergeType = "already-up-to-date";
+								} else {
+									// Check if it was a fast-forward
+									const ancestorCheck = await git
+										.raw([
+											"merge-base",
+											"--is-ancestor",
+											currentBranch,
+											"HEAD",
+										])
+										.catch(() => "");
+									mergeType =
+										ancestorCheck === ""
+											? "fast-forward"
+											: "merge-commit";
+								}
+							} catch {
+								// If we can't determine type, assume merge commit
+								mergeType = "merge-commit";
+							}
+						} catch (error) {
+							const message =
+								error instanceof Error
+									? error.message
+									: String(error);
+
+							// Check for conflicts
+							if (
+								message.includes("CONFLICT") ||
+								message.includes("merge failed") ||
+								message.includes("could not apply")
+							) {
+								// Abort the merge
+								await git.merge(["--abort"]).catch(() => {});
+								throw new Error(
+									`Merge failed due to conflicts. Operation aborted. Resolve conflicts manually on branch '${input.targetBranch}'.`
+								);
+							}
+
+							// Check for fast-forward only failure
+							if (
+								input.fastForwardOnly &&
+								message.includes("fatal: Not possible to fast-forward")
+							) {
+								throw new Error(
+									"Cannot fast-forward: target branch has diverged. Try without fast-forward only option."
+								);
+							}
+
+							throw error;
+						} finally {
+							// CRITICAL: Always switch back to original branch
+							await git.checkout(currentBranch).catch(() => {});
+						}
+
+						return { success: true, mergeType };
+					});
+				}
+			),
+
 		// Abort an ongoing rebase
 		abortRebase: publicProcedure
 			.input(

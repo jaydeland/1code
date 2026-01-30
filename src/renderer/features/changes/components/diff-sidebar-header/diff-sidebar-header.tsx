@@ -24,6 +24,7 @@ import { IconFetch, IconForcePush, IconSpinner, AgentIcon, CircleFilterIcon, Ico
 import { DialogIcons, DialogIconSizes } from "../../../../lib/dialog-icons";
 import { DiffViewModeSwitcher } from "./diff-view-mode-switcher";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { MergeBranchDialog } from "../merge-branch-dialog/merge-branch-dialog";
 import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
 import { LuGitBranch } from "react-icons/lu";
 import {
@@ -162,6 +163,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [displayTime, setDisplayTime] = useState<string>("");
+	const [mergeBranchDialogOpen, setMergeBranchDialogOpen] = useState(false);
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 	const { data: branchData, refetch: refetchBranches } =
@@ -718,6 +720,22 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 												</span>
 											)}
 										</DropdownMenuItem>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem
+											onClick={() => setMergeBranchDialogOpen(true)}
+											disabled={isDefaultBranch}
+											className="text-xs"
+										>
+											<GitMerge className="mr-2 size-3.5" />
+											<div className="flex-1">
+												<div>Merge into local branch...</div>
+												<div className="text-[10px] text-muted-foreground">
+													{isDefaultBranch
+														? "Not available on default branch"
+														: "Merge current branch into another branch"}
+												</div>
+											</div>
+										</DropdownMenuItem>
 									</>
 								)}
 
@@ -955,5 +973,21 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 				</DropdownMenu>
 			</div>
 		</div>
+
+		{/* Merge branch dialog */}
+		{branchData && (
+			<MergeBranchDialog
+				open={mergeBranchDialogOpen}
+				onOpenChange={setMergeBranchDialogOpen}
+				worktreePath={worktreePath}
+				currentBranch={currentBranch}
+				localBranches={branchData.local}
+				defaultBranch={branchData.defaultBranch}
+				onMergeComplete={() => {
+					refetchBranches();
+					onRefresh?.();
+				}}
+			/>
+		)}
 	);
 })
