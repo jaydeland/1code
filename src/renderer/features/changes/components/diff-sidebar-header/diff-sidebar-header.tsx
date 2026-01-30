@@ -426,6 +426,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 		: primaryAction;
 
 	return (
+		<>
 		<div className="relative flex items-center justify-between h-10 px-2 border-b border-border/50 bg-background flex-shrink-0">
 			{/* Drag region for window dragging */}
 			{isDesktop && !isFullscreen && (
@@ -989,5 +990,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 				}}
 			/>
 		)}
+		</>
 	);
 })
