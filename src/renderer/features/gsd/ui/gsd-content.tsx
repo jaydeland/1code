@@ -24,6 +24,7 @@ import {
   selectedPlanningDocAtom,
   selectedGsdDocAtom,
   expandedGsdFoldersAtom,
+  selectedGsdCategoryAtom,
 } from "../atoms"
 import { Button } from "../../../components/ui/button"
 import {
@@ -215,12 +216,14 @@ function GsdPlans({
   const [expandedFolders, setExpandedFolders] = useAtom(expandedGsdFoldersAtom)
   const selectedProjectId = useAtomValue(selectedGsdProjectIdAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
+  const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
   const utils = trpc.useUtils()
 
   const createChatMutation = trpc.chats.create.useMutation({
     onSuccess: (data) => {
       utils.chats.list.invalidate()
       setSelectedChatId(data.id)
+      setSelectedGsdCategory(null) // Clear GSD category to navigate to the new chat
     },
   })
 

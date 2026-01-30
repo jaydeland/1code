@@ -28,6 +28,7 @@ import {
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
+import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +51,7 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
   const setSelectedWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setSelectedMcpCategory = useSetAtom(selectedMcpCategoryAtom)
   const setSelectedClustersCategory = useSetAtom(selectedClustersCategoryAtom)
+  const setSelectedGsdCategory = useSetAtom(selectedGsdCategoryAtom)
 
   // Fetch all projects
   const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
@@ -188,7 +190,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setSelectedMcpCategory(null)
     // Clear clusters category when chat is selected
     setSelectedClustersCategory(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory])
+    // Clear GSD category when chat is selected
+    setSelectedGsdCategory(null)
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory])
 
   // Handle workspace click
   const handleWorkspaceClick = useCallback((workspace: any) => {
@@ -228,7 +232,9 @@ export function WorkspacesTabContent({ className, isMobileFullscreen }: Workspac
     setSelectedMcpCategory(null)
     // Clear clusters category when creating new chat
     setSelectedClustersCategory(null)
-  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory])
+    // Clear GSD category when creating new chat
+    setSelectedGsdCategory(null)
+  }, [projects, setSelectedProject, setSelectedChatId, setSelectedDraftId, setSelectedWorkflowCategory, setSelectedMcpCategory, setSelectedClustersCategory, setSelectedGsdCategory])
 
   // Group chats by project and filter by search
   const workspacesWithChats = useMemo(() => {
