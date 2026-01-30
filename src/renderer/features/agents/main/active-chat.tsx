@@ -121,6 +121,7 @@ import {
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
+  isMergingWithAiAtom,
   selectedDiffFilePathAtom,
   isPlanModeAtom,
   justCreatedIdsAtom,
@@ -128,6 +129,7 @@ import {
   loadingSubChatsAtom,
   pendingAuthRetryMessageAtom,
   pendingConflictResolutionMessageAtom,
+  pendingMergeMessageAtom,
   pendingPostMergeMessageAtom,
   pendingPlanApprovalsAtom,
   pendingPrMessageAtom,
@@ -216,7 +218,7 @@ import { TextSelectionPopover } from "../ui/text-selection-popover"
 import { QuickCommentInput } from "../ui/quick-comment-input"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { autoRenameAgentChat } from "../utils/auto-rename"
-import { generateCommitToPrMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
+import { generateCommitToPrMessage, generateMergeMessage, generatePrMessage, generateReviewMessage } from "../utils/pr-message"
 import { ChatInputArea } from "./chat-input-area"
 import { IsolatedMessagesSection } from "./isolated-messages-section"
 const clearSubChatSelectionAtom = atom(null, () => {})
@@ -1633,6 +1635,8 @@ interface DiffSidebarRendererProps {
   isReviewing: boolean
   handleCreatePr: () => void
   isCreatingPr: boolean
+  handleMergeWithAi: (targetBranch: string) => void
+  isMergingWithAi: boolean
   handleMergePr: () => void
   mergePrMutation: { isPending: boolean }
   handleRefreshGitStatus: () => void
@@ -1678,6 +1682,8 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
   isReviewing,
   handleCreatePr,
   isCreatingPr,
+  handleMergeWithAi,
+  isMergingWithAi,
   handleMergePr,
   mergePrMutation,
   handleRefreshGitStatus,
@@ -1733,6 +1739,8 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
           isCreatingPr={isCreatingPr}
           onCreatePrWithAI={handleCreatePr}
           isCreatingPrWithAI={isCreatingPr}
+          onMergeWithAi={handleMergeWithAi}
+          isMergingWithAi={isMergingWithAi}
           onMergePr={handleMergePr}
           isMergingPr={mergePrMutation.isPending}
           onClose={handleCloseDiff}
@@ -1923,6 +1931,9 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // PR creation loading state - from atom to allow resetting after message sent
   const setIsCreatingPr = useSetAtom(isCreatingPrAtom)
+
+  // Merge with AI loading state - from atom to allow resetting after message sent
+  const setIsMergingWithAi = useSetAtom(isMergingWithAiAtom)
 
   // Rollback state
   const [isRollingBack, setIsRollingBack] = useState(false)
@@ -2349,17 +2360,19 @@ const ChatViewInner = memo(function ChatViewInner({
     status
   )
 
-  // CONSOLIDATED: 5 pending message effects -> 1 hook (usePendingMessages)
-  // Handles PR, Review, Conflict, Post-Merge, and Auth retry messages
+  // CONSOLIDATED: 6 pending message effects -> 1 hook (usePendingMessages)
+  // Handles PR, Merge, Review, Conflict, Post-Merge, and Auth retry messages
   usePendingMessages(
     {
       isStreaming,
       subChatId,
       sendMessage,
       setIsCreatingPr,
+      setIsMergingWithAi,
     },
     {
       pendingPrMessageAtom,
+      pendingMergeMessageAtom,
       pendingReviewMessageAtom,
       pendingConflictResolutionMessageAtom,
       pendingPostMergeMessageAtom,
@@ -4401,6 +4414,48 @@ export function ChatView({
     }
   }, [chatId, setPendingPrMessage])
 
+  // Handle Merge with AI - sends a message to Claude to perform merge
+  const [isMergingWithAi, setIsMergingWithAi] = useAtom(isMergingWithAiAtom)
+  const setPendingMergeMessage = useSetAtom(pendingMergeMessageAtom)
+
+  const handleMergeWithAi = useCallback(
+    async (targetBranch: string) => {
+      if (!chatId) {
+        toast.error("Chat ID is required", { position: "top-center" })
+        return
+      }
+
+      setIsMergingWithAi(true)
+      try {
+        // 1. Get merge context from backend
+        const context = await trpcClient.chats.getMergeContext.query({
+          chatId,
+          targetBranch,
+        })
+
+        if (!context) {
+          toast.error("Could not get merge context", { position: "top-center" })
+          setIsMergingWithAi(false)
+          return
+        }
+
+        // 2. Generate message for Claude
+        const message = generateMergeMessage(context)
+
+        // 3. Set pending message for ChatViewInner to send
+        setPendingMergeMessage(message)
+        // Loading state persists until message is sent
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to prepare merge request",
+          { position: "top-center" },
+        )
+        setIsMergingWithAi(false)
+      }
+    },
+    [chatId, setPendingMergeMessage, setIsMergingWithAi],
+  )
+
   // Handle Commit to existing PR - sends a message to Claude to commit and push
   const [isCommittingToPr, setIsCommittingToPr] = useState(false)
   const handleCommitToPr = useCallback(async () => {
@@ -5620,6 +5675,8 @@ Make sure to preserve all functionality from both branches when resolving confli
               isReviewing={isReviewing}
               handleCreatePr={handleCreatePr}
               isCreatingPr={isCreatingPr}
+              handleMergeWithAi={handleMergeWithAi}
+              isMergingWithAi={isMergingWithAi}
               handleMergePr={handleMergePr}
               mergePrMutation={mergePrMutation}
               handleRefreshGitStatus={handleRefreshGitStatus}

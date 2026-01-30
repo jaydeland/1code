@@ -137,6 +137,8 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	isCreatingPr = false,
 	onCreatePrWithAI,
 	isCreatingPrWithAI = false,
+	onMergeWithAi,
+	isMergingWithAi = false,
 	onMergePr,
 	isMergingPr = false,
 	onClose,
@@ -997,6 +999,8 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 					refetchBranches();
 					onRefresh?.();
 				}}
+				onMergeWithAi={onMergeWithAi}
+				isMergingWithAi={isMergingWithAi}
 			/>
 		)}
 		</>

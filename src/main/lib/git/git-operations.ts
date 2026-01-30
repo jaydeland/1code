@@ -37,7 +37,7 @@ const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"
  * @param branchName - The branch name to check
  * @returns The worktree path where the branch is checked out, or null if not checked out
  */
-async function getBranchWorktreePath(
+export async function getBranchWorktreePath(
 	git: ReturnType<typeof simpleGit>,
 	branchName: string,
 ): Promise<string | null> {

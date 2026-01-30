@@ -474,6 +474,12 @@ export const selectedDiffFilePathAtom = atom<string | null>(null)
 // PR creation loading state - atom to allow ChatViewInner to reset it after sending message
 export const isCreatingPrAtom = atom<boolean>(false)
 
+// Merge with AI loading state (similar to isCreatingPrAtom)
+export const isMergingWithAiAtom = atom<boolean>(false)
+
+// Pending merge message to send to chat (similar to pendingPrMessageAtom)
+export const pendingMergeMessageAtom = atom<string | null>(null)
+
 // Filter by subchat ID for diff sidebar and changes panel (null = show all)
 // When set by Review button, both diff view and file list filter to this subchat's files
 export const filteredSubChatIdAtom = atom<string | null>(null)

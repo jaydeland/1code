@@ -35,6 +35,8 @@ interface MergeBranchDialogProps {
   localBranches: string[]
   defaultBranch: string
   onMergeComplete: () => void
+  onMergeWithAi?: (targetBranch: string) => void
+  isMergingWithAi?: boolean
 }
 
 export function MergeBranchDialog({
@@ -45,6 +47,8 @@ export function MergeBranchDialog({
   localBranches,
   defaultBranch,
   onMergeComplete,
+  onMergeWithAi,
+  isMergingWithAi,
 }: MergeBranchDialogProps) {
   const [targetBranch, setTargetBranch] = useState<string>("")
   const [targetBranchOpen, setTargetBranchOpen] = useState(false)
@@ -108,6 +112,24 @@ export function MergeBranchDialog({
       targetBranch,
       fastForwardOnly: false,
     })
+  }
+
+  const handleMergeWithAi = () => {
+    if (!targetBranch.trim()) {
+      toast.error("Please select a target branch")
+      return
+    }
+
+    if (!onMergeWithAi) return
+
+    // Close dialog immediately (AI will handle from here)
+    onOpenChange(false)
+
+    // Trigger AI merge
+    onMergeWithAi(targetBranch)
+
+    // Reset selection
+    setTargetBranch("")
   }
 
   return (
@@ -199,7 +221,7 @@ export function MergeBranchDialog({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={mergeMutation.isPending}
+            disabled={mergeMutation.isPending || isMergingWithAi}
             className="transition-transform duration-150 active:scale-[0.97] rounded-md"
           >
             Cancel
@@ -207,7 +229,7 @@ export function MergeBranchDialog({
           <Button
             type="button"
             onClick={handleMerge}
-            disabled={!targetBranch.trim() || mergeMutation.isPending}
+            disabled={!targetBranch.trim() || mergeMutation.isPending || isMergingWithAi}
             className="transition-transform duration-150 active:scale-[0.97] rounded-md"
           >
             {mergeMutation.isPending ? (
@@ -219,6 +241,24 @@ export function MergeBranchDialog({
               "Merge"
             )}
           </Button>
+          {onMergeWithAi && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleMergeWithAi}
+              disabled={!targetBranch.trim() || mergeMutation.isPending || isMergingWithAi}
+              className="transition-transform duration-150 active:scale-[0.97] rounded-md"
+            >
+              {isMergingWithAi ? (
+                <>
+                  <IconSpinner className="w-4 h-4 mr-2" />
+                  Preparing...
+                </>
+              ) : (
+                "Merge with AI"
+              )}
+            </Button>
+          )}
         </CanvasDialogFooter>
       </CanvasDialogContent>
     </Dialog>

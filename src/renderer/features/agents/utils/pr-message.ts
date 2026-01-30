@@ -103,3 +103,88 @@ Provide:
 
 Keep the review concise and actionable.`
 }
+
+export interface MergeContext {
+  sourceBranch: string
+  targetBranch: string
+  uncommittedCount: number
+  targetWorktreePath: string | null
+  targetHasUncommittedChanges: boolean
+  currentWorktreePath: string
+}
+
+/**
+ * Generates a message for Claude to perform a local merge
+ * Provides step-by-step instructions similar to PR creation
+ */
+export function generateMergeMessage(context: MergeContext): string {
+  const {
+    sourceBranch,
+    targetBranch,
+    uncommittedCount,
+    targetWorktreePath,
+    targetHasUncommittedChanges,
+  } = context
+
+  const lines = [
+    `The user wants to merge branch '${sourceBranch}' into '${targetBranch}'.`,
+    uncommittedCount > 0
+      ? `There are ${uncommittedCount} uncommitted changes on '${sourceBranch}'.`
+      : `All changes are committed on '${sourceBranch}'.`,
+    targetWorktreePath
+      ? `The target branch '${targetBranch}' is checked out in worktree at: ${targetWorktreePath}`
+      : `The target branch '${targetBranch}' is not currently checked out in any worktree.`,
+    targetHasUncommittedChanges ? `WARNING: The target branch has uncommitted changes.` : "",
+    "",
+    "Follow these exact steps to merge:",
+    "",
+  ].filter(Boolean)
+
+  const steps: string[] = []
+
+  // Handle uncommitted changes on source
+  if (uncommittedCount > 0) {
+    steps.push(
+      "Review uncommitted changes on the source branch with git diff",
+      "Commit them with a clear message, OR stash them if they shouldn't be included",
+    )
+  }
+
+  // Handle dual-worktree scenario
+  if (targetWorktreePath) {
+    if (targetHasUncommittedChanges) {
+      steps.push(
+        `Switch to target worktree: cd ${targetWorktreePath}`,
+        "Review uncommitted changes with git diff",
+        "Either commit or stash these changes before proceeding",
+      )
+    }
+    steps.push(
+      `Ensure you're in the target worktree: cd ${targetWorktreePath}`,
+      `Run: git merge ${sourceBranch} --no-edit`,
+      "If merge conflicts occur, list them with: git status",
+      "For each conflict, examine the file and resolve the conflict markers",
+      "After resolving conflicts, stage with: git add <file>",
+      "Complete the merge with: git commit --no-edit",
+    )
+  } else {
+    // Single worktree scenario
+    steps.push(
+      `Switch to target branch: git checkout ${targetBranch}`,
+      `Run: git merge ${sourceBranch} --no-edit`,
+      "If merge conflicts occur, list them with: git status",
+      "For each conflict, examine the file and resolve the conflict markers",
+      "After resolving conflicts, stage with: git add <file>",
+      "Complete the merge with: git commit --no-edit",
+      `Return to source branch: git checkout ${sourceBranch}`,
+    )
+  }
+
+  steps.push("If any step fails, explain the error to the user and ask for guidance.")
+
+  steps.forEach((step, index) => {
+    lines.push(`${index + 1}. ${step}`)
+  })
+
+  return lines.join("\n")
+}

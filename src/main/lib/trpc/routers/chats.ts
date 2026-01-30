@@ -1328,6 +1328,64 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Get merge context for AI-delegated merging
+   * Returns information Claude needs to execute merge commands
+   */
+  getMergeContext: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        targetBranch: z.string(), // Branch to merge INTO (e.g., "main")
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDatabase()
+      const chat = db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, input.chatId))
+        .get()
+
+      if (!chat?.worktreePath) {
+        return null
+      }
+
+      try {
+        const git = simpleGit(chat.worktreePath)
+        const status = await git.status()
+
+        const sourceBranch = chat.branch || status.current || "unknown"
+
+        // Import helper from git-operations
+        const { getBranchWorktreePath } = await import("../../git/git-operations")
+        const targetWorktreePath = await getBranchWorktreePath(
+          git,
+          input.targetBranch,
+        )
+
+        // Check for uncommitted changes in target worktree if it exists
+        let targetHasUncommittedChanges = false
+        if (targetWorktreePath) {
+          const targetGit = simpleGit(targetWorktreePath)
+          const targetStatus = await targetGit.status()
+          targetHasUncommittedChanges = targetStatus.files.length > 0
+        }
+
+        return {
+          sourceBranch,
+          targetBranch: input.targetBranch,
+          uncommittedCount: status.files.length,
+          targetWorktreePath: targetWorktreePath || null,
+          targetHasUncommittedChanges,
+          currentWorktreePath: chat.worktreePath,
+        }
+      } catch (error) {
+        console.error("[getMergeContext] Error:", error)
+        return null
+      }
+    }),
+
+  /**
    * Update PR info after Claude creates a PR
    */
   updatePrInfo: publicProcedure

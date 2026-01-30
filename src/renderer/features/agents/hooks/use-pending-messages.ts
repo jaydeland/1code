@@ -7,10 +7,12 @@ interface PendingMessagesConfig {
   subChatId: string
   sendMessage: (message: { role: "user"; parts: Array<{ type: "text"; text: string } | { type: "data-image"; data: any }> }) => void
   setIsCreatingPr: (value: boolean) => void
+  setIsMergingWithAi?: (value: boolean) => void
 }
 
 interface PendingMessageAtoms {
   pendingPrMessageAtom: PrimitiveAtom<string | null>
+  pendingMergeMessageAtom: PrimitiveAtom<string | null>
   pendingReviewMessageAtom: PrimitiveAtom<string | null>
   pendingConflictResolutionMessageAtom: PrimitiveAtom<string | null>
   pendingPostMergeMessageAtom: PrimitiveAtom<string | null>
@@ -23,16 +25,17 @@ interface PendingMessageAtoms {
 }
 
 /**
- * Consolidated hook for watching pending messages (PR, Review, Conflict, Auth)
- * Reduces 4 separate useEffect hooks into 1
+ * Consolidated hook for watching pending messages (PR, Merge, Review, Conflict, Auth)
+ * Reduces multiple separate useEffect hooks into 1
  */
 export function usePendingMessages(
   config: PendingMessagesConfig,
   atoms: PendingMessageAtoms
 ) {
-  const { isStreaming, subChatId, sendMessage, setIsCreatingPr } = config
+  const { isStreaming, subChatId, sendMessage, setIsCreatingPr, setIsMergingWithAi } = config
 
   const [pendingPrMessage, setPendingPrMessage] = useAtom(atoms.pendingPrMessageAtom)
+  const [pendingMergeMessage, setPendingMergeMessage] = useAtom(atoms.pendingMergeMessageAtom)
   const [pendingReviewMessage, setPendingReviewMessage] = useAtom(atoms.pendingReviewMessageAtom)
   const [pendingConflictMessage, setPendingConflictMessage] = useAtom(atoms.pendingConflictResolutionMessageAtom)
   const [pendingPostMergeMessage, setPendingPostMergeMessage] = useAtom(atoms.pendingPostMergeMessageAtom)
@@ -54,6 +57,17 @@ export function usePendingMessages(
         parts: [{ type: "text", text: pendingPrMessage }],
       })
       setIsCreatingPr(false)
+      return
+    }
+
+    // Process pending Merge message
+    if (pendingMergeMessage) {
+      setPendingMergeMessage(null)
+      sendMessageRef.current({
+        role: "user",
+        parts: [{ type: "text", text: pendingMergeMessage }],
+      })
+      setIsMergingWithAi?.(false)
       return
     }
 
@@ -111,20 +125,24 @@ export function usePendingMessages(
     isStreaming,
     subChatId,
     pendingPrMessage,
+    pendingMergeMessage,
     pendingReviewMessage,
     pendingConflictMessage,
     pendingPostMergeMessage,
     pendingAuthRetry,
     setPendingPrMessage,
+    setPendingMergeMessage,
     setPendingReviewMessage,
     setPendingConflictMessage,
     setPendingPostMergeMessage,
     setPendingAuthRetry,
     setIsCreatingPr,
+    setIsMergingWithAi,
   ])
 
   return {
     setPendingPrMessage,
+    setPendingMergeMessage,
     setPendingReviewMessage,
     setPendingConflictMessage,
     setPendingPostMergeMessage,
