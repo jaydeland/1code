@@ -158,7 +158,15 @@ function SessionFlowPanelInner({ onScrollToMessage }: SessionFlowPanelProps) {
         onMoveEnd={handleMove}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#e2e8f0" gap={16} />
+        <Background
+          variant="dots"
+          gap={20}
+          size={1}
+          className="[&>*]:dark:opacity-30 [&>*]:opacity-60"
+          style={{
+            backgroundColor: 'hsl(var(--background))'
+          }}
+        />
         <Controls
           showZoom={true}
           showFitView={true}
