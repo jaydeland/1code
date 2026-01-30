@@ -630,9 +630,11 @@ export const selectedCommandAtom = atom<string | null>(null)
  * - "agents": List of available agents
  * - "skills": List of available skills
  * - "mcps": List of MCP servers
+ * - "clusters": Cluster management
  * - "terminal": Terminal sessions list
+ * - "gsd": GSD (Get Shit Done) planning framework
  */
-export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal"
+export type SidebarTab = "history" | "chats" | "commands" | "agents" | "skills" | "mcps" | "clusters" | "terminal" | "gsd"
 
 /**
  * Currently selected sidebar tab (persisted)

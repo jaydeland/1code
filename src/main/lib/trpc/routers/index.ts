@@ -19,6 +19,7 @@ import { awsSsoRouter } from "./aws-sso"
 import { configManagementRouter } from "./config-management"
 import { clustersRouter } from "./clusters"
 import { tasksRouter } from "./tasks"
+import { gsdRouter } from "./gsd"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -48,6 +49,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     configManagement: configManagementRouter,
     clusters: clustersRouter,
     tasks: tasksRouter,
+    gsd: gsdRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

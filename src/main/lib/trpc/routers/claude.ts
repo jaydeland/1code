@@ -28,6 +28,7 @@ import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import { getMergedMcpConfig } from "../../config/consolidator"
 import { taskEvents, taskWatcher } from "../../background-tasks"
+import { getBundledGsdPath } from "./gsd"
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:name] mentions from prompt text
@@ -790,6 +791,7 @@ export const claudeRouter = router({
             // Ensure isolated config dir exists and symlink skills/agents from ~/.claude/
             // This is needed because SDK looks for skills at $CLAUDE_CONFIG_DIR/skills/
             // OPTIMIZATION: Only create symlinks once per subChatId (cached)
+            // BUNDLED GSD: Prefer bundled GSD resources over user's ~/.claude/ directory
             try {
               await fs.mkdir(isolatedConfigDir, { recursive: true })
 
@@ -797,54 +799,74 @@ export const claudeRouter = router({
               const cacheKey = isUsingOllama ? input.chatId : input.subChatId
               if (!symlinksCreated.has(cacheKey)) {
                 const homeClaudeDir = path.join(os.homedir(), ".claude")
-                const skillsSource = path.join(homeClaudeDir, "skills")
-                const skillsTarget = path.join(isolatedConfigDir, "skills")
-                const agentsSource = path.join(homeClaudeDir, "agents")
-                const agentsTarget = path.join(isolatedConfigDir, "agents")
+                const bundledGsdPath = getBundledGsdPath()
 
-                // Symlink skills directory if source exists and target doesn't
+                // Helper to check if path exists
+                const pathExists = async (p: string) => fs.stat(p).then(() => true).catch(() => false)
+
+                // Symlink skills directory - prefer bundled GSD, fallback to ~/.claude/
                 try {
-                  const skillsSourceExists = await fs.stat(skillsSource).then(() => true).catch(() => false)
+                  const skillsTarget = path.join(isolatedConfigDir, "skills")
                   const skillsTargetExists = await fs.lstat(skillsTarget).then(() => true).catch(() => false)
-                  if (skillsSourceExists && !skillsTargetExists) {
-                    await fs.symlink(skillsSource, skillsTarget, "dir")
-                    console.log(`[claude] Symlinked skills: ${skillsSource} → ${skillsTarget}`)
+                  if (!skillsTargetExists) {
+                    // Check bundled GSD first (GSD doesn't have skills, but keep pattern consistent)
+                    const bundledSkillsSource = path.join(bundledGsdPath, "skills")
+                    const userSkillsSource = path.join(homeClaudeDir, "skills")
+                    const bundledExists = await pathExists(bundledSkillsSource)
+                    const userExists = await pathExists(userSkillsSource)
+                    const skillsSource = bundledExists ? bundledSkillsSource : (userExists ? userSkillsSource : null)
+                    if (skillsSource) {
+                      await fs.symlink(skillsSource, skillsTarget, "dir")
+                      console.log(`[claude] Symlinked skills: ${skillsSource} → ${skillsTarget}`)
+                    }
                   }
                 } catch (symlinkErr) {
                   console.error(`[claude] Failed to symlink skills directory:`, symlinkErr)
                 }
 
-                // Symlink agents directory if source exists and target doesn't
+                // Symlink agents directory - prefer bundled GSD, fallback to ~/.claude/
                 try {
-                  const agentsSourceExists = await fs.stat(agentsSource).then(() => true).catch(() => false)
+                  const agentsTarget = path.join(isolatedConfigDir, "agents")
                   const agentsTargetExists = await fs.lstat(agentsTarget).then(() => true).catch(() => false)
-                  if (agentsSourceExists && !agentsTargetExists) {
-                    await fs.symlink(agentsSource, agentsTarget, "dir")
-                    console.log(`[claude] Symlinked agents: ${agentsSource} → ${agentsTarget}`)
+                  if (!agentsTargetExists) {
+                    const bundledAgentsSource = path.join(bundledGsdPath, "agents")
+                    const userAgentsSource = path.join(homeClaudeDir, "agents")
+                    const bundledExists = await pathExists(bundledAgentsSource)
+                    const userExists = await pathExists(userAgentsSource)
+                    const agentsSource = bundledExists ? bundledAgentsSource : (userExists ? userAgentsSource : null)
+                    if (agentsSource) {
+                      await fs.symlink(agentsSource, agentsTarget, "dir")
+                      console.log(`[claude] Symlinked agents: ${agentsSource} → ${agentsTarget}${bundledExists ? " (bundled GSD)" : ""}`)
+                    }
                   }
                 } catch (symlinkErr) {
                   console.error(`[claude] Failed to symlink agents directory:`, symlinkErr)
                 }
 
-                // Symlink commands directory if source exists and target doesn't
+                // Symlink commands directory - prefer bundled GSD, fallback to ~/.claude/
                 try {
-                  const commandsSource = path.join(homeClaudeDir, "commands")
                   const commandsTarget = path.join(isolatedConfigDir, "commands")
-                  const commandsSourceExists = await fs.stat(commandsSource).then(() => true).catch(() => false)
                   const commandsTargetExists = await fs.lstat(commandsTarget).then(() => true).catch(() => false)
-                  if (commandsSourceExists && !commandsTargetExists) {
-                    await fs.symlink(commandsSource, commandsTarget, "dir")
-                    console.log(`[claude] Symlinked commands: ${commandsSource} → ${commandsTarget}`)
+                  if (!commandsTargetExists) {
+                    const bundledCommandsSource = path.join(bundledGsdPath, "commands")
+                    const userCommandsSource = path.join(homeClaudeDir, "commands")
+                    const bundledExists = await pathExists(bundledCommandsSource)
+                    const userExists = await pathExists(userCommandsSource)
+                    const commandsSource = bundledExists ? bundledCommandsSource : (userExists ? userCommandsSource : null)
+                    if (commandsSource) {
+                      await fs.symlink(commandsSource, commandsTarget, "dir")
+                      console.log(`[claude] Symlinked commands: ${commandsSource} → ${commandsTarget}${bundledExists ? " (bundled GSD)" : ""}`)
+                    }
                   }
                 } catch (symlinkErr) {
                   console.error(`[claude] Failed to symlink commands directory:`, symlinkErr)
                 }
 
-                // Symlink rules directory if source exists and target doesn't
+                // Symlink rules directory - only from ~/.claude/ (GSD doesn't have rules)
                 try {
                   const rulesSource = path.join(homeClaudeDir, "rules")
                   const rulesTarget = path.join(isolatedConfigDir, "rules")
-                  const rulesSourceExists = await fs.stat(rulesSource).then(() => true).catch(() => false)
+                  const rulesSourceExists = await pathExists(rulesSource)
                   const rulesTargetExists = await fs.lstat(rulesTarget).then(() => true).catch(() => false)
                   if (rulesSourceExists && !rulesTargetExists) {
                     await fs.symlink(rulesSource, rulesTarget, "dir")
