@@ -3592,37 +3592,34 @@ const ChatViewInner = memo(function ChatViewInner({
         </div>
       )}
 
-      {/* Stacked cards container - queue + status */}
-      {!pendingQuestions &&
-        (queue.length > 0 || changedFilesForSubChat.length > 0) && (
-          <div className="px-2 -mb-6 relative z-10">
-            <div className="w-full max-w-[90%] mx-auto px-2">
-              {/* Queue indicator card - top card */}
-              {queue.length > 0 && (
-                <AgentQueueIndicator
-                  queue={queue}
-                  onRemoveItem={handleRemoveFromQueue}
-                  onSendNow={handleSendFromQueue}
-                  isStreaming={isStreaming}
-                  hasStatusCardBelow={changedFilesForSubChat.length > 0}
-                />
-              )}
-              {/* Status card - bottom card, only when there are changed files */}
-              {changedFilesForSubChat.length > 0 && (
-                <SubChatStatusCard
-                  chatId={parentChatId}
-                  subChatId={subChatId}
-                  isStreaming={isStreaming}
-                  isCompacting={isCompacting}
-                  changedFiles={changedFilesForSubChat}
-                  worktreePath={projectPath}
-                  onStop={handleStop}
-                  hasQueueCardAbove={queue.length > 0}
-                />
-              )}
-            </div>
+      {/* Stacked cards container - queue + status + session */}
+      {!pendingQuestions && (
+        <div className="px-2 -mb-6 relative z-10">
+          <div className="w-full max-w-2xl mx-auto px-2">
+            {/* Queue indicator card - top card */}
+            {queue.length > 0 && (
+              <AgentQueueIndicator
+                queue={queue}
+                onRemoveItem={handleRemoveFromQueue}
+                onSendNow={handleSendFromQueue}
+                isStreaming={isStreaming}
+                hasStatusCardBelow={changedFilesForSubChat.length > 0}
+              />
+            )}
+            {/* Unified status bar - shows changes, tasks, agents, todos */}
+            <SubChatStatusCard
+              chatId={parentChatId}
+              subChatId={subChatId}
+              isStreaming={isStreaming}
+              isCompacting={isCompacting}
+              changedFiles={changedFilesForSubChat}
+              worktreePath={projectPath}
+              onStop={handleStop}
+              hasQueueCardAbove={queue.length > 0}
+            />
           </div>
-        )}
+        </div>
+      )}
 
       {/* Input - isolated component to prevent re-renders */}
       <ChatInputArea

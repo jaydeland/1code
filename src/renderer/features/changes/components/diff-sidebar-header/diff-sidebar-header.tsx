@@ -79,6 +79,8 @@ interface DiffSidebarHeaderProps {
 	isCreatingPr?: boolean;
 	onCreatePrWithAI?: () => void;
 	isCreatingPrWithAI?: boolean;
+	onMergeWithAi?: (targetBranch: string) => void;
+	isMergingWithAi?: boolean;
 	onMergePr?: () => void;
 	isMergingPr?: boolean;
 	onClose: () => void;
