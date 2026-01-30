@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   FolderOpen,
+  Rocket,
 } from "lucide-react"
 import {
   Tooltip,
@@ -25,6 +26,7 @@ import { selectedSidebarTabAtom, sidebarContentCollapsedAtom, type SidebarTab } 
 import { selectedWorkflowCategoryAtom } from "../../workflows/atoms"
 import { selectedClustersCategoryAtom } from "../../clusters/atoms"
 import { selectedMcpCategoryAtom } from "../../mcp/atoms"
+import { selectedGsdCategoryAtom } from "../../gsd/atoms"
 
 interface TabItem {
   id: SidebarTab
@@ -41,6 +43,7 @@ const tabs: TabItem[] = [
   { id: "skills", label: "Skills", icon: Sparkles },
   { id: "mcps", label: "MCPs", icon: Plug },
   { id: "clusters", label: "Clusters", icon: Server },
+  { id: "gsd", label: "GSD", icon: Rocket },
 ]
 
 interface SidebarTabBarProps {
@@ -56,6 +59,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
   const setWorkflowCategory = useSetAtom(selectedWorkflowCategoryAtom)
   const setClustersCategory = useSetAtom(selectedClustersCategoryAtom)
   const setMcpCategory = useSetAtom(selectedMcpCategoryAtom)
+  const setGsdCategory = useSetAtom(selectedGsdCategoryAtom)
 
   const handleTabClick = (tabId: SidebarTab) => {
     if (selectedTab === tabId) {
@@ -71,6 +75,7 @@ export function SidebarTabBar({ isCollapsed = false, className }: SidebarTabBarP
       setWorkflowCategory(null)
       setClustersCategory(null)
       setMcpCategory(null)
+      setGsdCategory(null)
     }
   }
 

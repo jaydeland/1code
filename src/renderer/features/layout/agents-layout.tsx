@@ -36,6 +36,7 @@ import {
   SkillsTabContent,
   McpsTabContent,
   TerminalTabContent,
+  GsdTabContent,
 } from "../sidebar/components"
 import { RightIconBar } from "./right-icon-bar"
 import { Button } from "../../components/ui/button"
@@ -282,6 +283,8 @@ export function AgentsLayout() {
                 <SkillsTabContent className="h-full" />
               ) : selectedSidebarTab === "mcps" ? (
                 <McpsTabContent className="h-full" />
+              ) : selectedSidebarTab === "gsd" ? (
+                <GsdTabContent className="h-full" />
               ) : null}
             </div>
           )}
