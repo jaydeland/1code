@@ -15,11 +15,21 @@ let cachedShellEnv: Record<string, string> | null = null
 const DELIMITER = "_CLAUDE_ENV_DELIMITER_"
 
 // Keys to strip (prevent auth interference)
+// CRITICAL: Include AWS credentials to prevent system SSO from leaking into app
 const STRIPPED_ENV_KEYS = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
+  // AWS credentials - must be set explicitly by the app, not inherited from system
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_PROFILE",
+  "AWS_DEFAULT_PROFILE",
+  // AWS config that could interfere
+  "AWS_SHARED_CREDENTIALS_FILE",
+  "AWS_CONFIG_FILE",
 ]
 
 // Cache the bundled binary path (only compute once)
@@ -102,6 +112,8 @@ export interface CredentialRefreshResult {
   success: boolean
   error?: string
   expiresAt?: Date
+  connectionMethod?: "profile" | "sso" // Which mode we're in
+  requiresReauth?: boolean // True if user must re-authenticate in Settings
 }
 
 /**
@@ -130,13 +142,13 @@ export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResu
 
     // Not in AWS mode - nothing to refresh
     if (!settings || settings.authMode !== "aws") {
-      return { success: true }
+      return { success: true, connectionMethod: "profile" }
     }
 
     // Profile mode - relies on system credentials, nothing to refresh in app
     const connectionMethod = settings.bedrockConnectionMethod || "profile"
     if (connectionMethod === "profile") {
-      return { success: true }
+      return { success: true, connectionMethod: "profile" }
     }
 
     // SSO mode - check if credentials need refresh
@@ -146,7 +158,7 @@ export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResu
 
     // Credentials are valid - no refresh needed
     if (!credentialsExpired && !credentialsMissing) {
-      return { success: true, expiresAt: settings.awsCredentialsExpiresAt || undefined }
+      return { success: true, expiresAt: settings.awsCredentialsExpiresAt || undefined, connectionMethod: "sso" }
     }
 
     console.log("[claude-env] SSO credentials expired or missing, attempting auto-refresh...")
@@ -155,12 +167,12 @@ export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResu
     // Check if we have SSO access token to refresh credentials
     if (!settings.ssoAccessToken || !settings.ssoRegion) {
       console.warn("[claude-env] No SSO access token available for refresh")
-      return { success: false, error: "SSO session not established. Please authenticate in Settings." }
+      return { success: false, error: "SSO session not established. Please authenticate in Settings.", connectionMethod: "sso", requiresReauth: true }
     }
 
     if (!settings.ssoAccountId || !settings.ssoRoleName) {
       console.warn("[claude-env] No SSO account/role selected for refresh")
-      return { success: false, error: "No AWS account/role selected. Please configure in Settings." }
+      return { success: false, error: "No AWS account/role selected. Please configure in Settings.", connectionMethod: "sso", requiresReauth: true }
     }
 
     // Dynamically import AwsSsoService to avoid circular deps
@@ -176,7 +188,7 @@ export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResu
 
       if (!settings.ssoRefreshToken || !settings.ssoClientId || !settings.ssoClientSecret) {
         console.warn("[claude-env] No refresh token available - user must re-authenticate")
-        return { success: false, error: "SSO session expired. Please re-authenticate in Settings." }
+        return { success: false, error: "SSO session expired. Please re-authenticate in Settings.", connectionMethod: "sso", requiresReauth: true }
       }
 
       try {
@@ -201,7 +213,7 @@ export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResu
         console.log("[claude-env] SSO access token refreshed successfully")
       } catch (tokenError: any) {
         console.error("[claude-env] Failed to refresh SSO token:", tokenError)
-        return { success: false, error: "Failed to refresh SSO session. Please re-authenticate in Settings." }
+        return { success: false, error: "Failed to refresh SSO session. Please re-authenticate in Settings.", connectionMethod: "sso", requiresReauth: true }
       }
     }
 
@@ -226,14 +238,14 @@ export async function ensureValidAwsCredentials(): Promise<CredentialRefreshResu
         .run()
 
       console.log("[claude-env] AWS credentials refreshed successfully, expires:", credentials.expiration)
-      return { success: true, expiresAt: credentials.expiration }
+      return { success: true, expiresAt: credentials.expiration, connectionMethod: "sso" }
     } catch (credError: any) {
       console.error("[claude-env] Failed to get role credentials:", credError)
-      return { success: false, error: `Failed to get AWS credentials: ${credError.message}` }
+      return { success: false, error: `Failed to get AWS credentials: ${credError.message}`, connectionMethod: "sso", requiresReauth: true }
     }
   } catch (error: any) {
     console.error("[claude-env] Unexpected error during credential refresh:", error)
-    return { success: false, error: `Credential refresh failed: ${error.message}` }
+    return { success: false, error: `Credential refresh failed: ${error.message}`, connectionMethod: "sso" }
   } finally {
     isRefreshing = false
   }
@@ -415,9 +427,10 @@ export function buildClaudeEnv(options?: {
 
   // 2. Overlay current process.env (preserves Electron-set vars)
   // BUT: Don't overwrite PATH from shell env - Electron's PATH is minimal when launched from Finder
+  // AND: Skip stripped keys to prevent system AWS credentials from leaking in
   const shellPath = env.PATH
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) {
+    if (value !== undefined && !STRIPPED_ENV_KEYS.includes(key)) {
       env[key] = value
     }
   }

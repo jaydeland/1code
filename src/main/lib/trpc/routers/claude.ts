@@ -385,7 +385,11 @@ export async function warmupMcpCache(): Promise<void> {
     const claudeQuery = sdk.query
 
     // Ensure AWS credentials are valid before warmup queries
-    await ensureValidAwsCredentials()
+    const credentialResult = await ensureValidAwsCredentials()
+    if (!credentialResult.success && credentialResult.connectionMethod === "sso") {
+      console.warn("[claude] MCP warmup skipped - SSO credentials invalid:", credentialResult.error)
+      return // Skip warmup if SSO credentials are invalid
+    }
 
     // Warm up each project
     for (const project of projectsWithMcp) {
@@ -766,8 +770,12 @@ export const claudeRouter = router({
             const credentialRefreshResult = await ensureValidAwsCredentials()
             if (!credentialRefreshResult.success && credentialRefreshResult.error) {
               console.warn("[claude] AWS credential refresh failed:", credentialRefreshResult.error)
-              // Don't block the request - let it fall back to system credentials
-              // But log it so we can debug if needed
+              // CRITICAL: In SSO mode, we must NOT fall back to system credentials
+              // This would cause the app to use the user's system AWS SSO instead of the app's SSO
+              if (credentialRefreshResult.connectionMethod === "sso") {
+                throw new Error(`AWS authentication failed: ${credentialRefreshResult.error}`)
+              }
+              // Profile mode can fall back to system credentials
             }
 
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
