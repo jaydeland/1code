@@ -23,8 +23,7 @@ import {
 import { IconFetch, IconForcePush, IconSpinner, AgentIcon, CircleFilterIcon, IconReview, ExternalLinkIcon } from "../../../../components/ui/icons";
 import { DialogIcons, DialogIconSizes } from "../../../../lib/dialog-icons";
 import { DiffViewModeSwitcher } from "./diff-view-mode-switcher";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { MergeBranchDialog } from "../merge-branch-dialog/merge-branch-dialog";
+import { memo, useEffect, useRef, useState } from "react";
 import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
 import { LuGitBranch } from "react-icons/lu";
 import {
@@ -167,7 +166,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [displayTime, setDisplayTime] = useState<string>("");
-	const [mergeBranchDialogOpen, setMergeBranchDialogOpen] = useState(false);
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 	const { data: branchData, refetch: refetchBranches } =
@@ -732,22 +730,39 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 									</>
 								)}
 
-								{/* Merge into local branch - available even without upstream (purely local operation) */}
-								{!isDefaultBranch && (
+								{/* Merge With AI - available even without upstream (purely local operation) */}
+								{!isDefaultBranch && onMergeWithAi && (
 									<>
 										<DropdownMenuSeparator />
-										<DropdownMenuItem
-											onClick={() => setMergeBranchDialogOpen(true)}
-											className="text-xs"
-										>
-											<GitMerge className="mr-2 size-3.5" />
-											<div className="flex-1">
-												<div>Merge into local branch...</div>
-												<div className="text-[10px] text-muted-foreground">
-													Merge current branch into another branch
+										<DropdownMenuSub>
+											<DropdownMenuSubTrigger className="text-xs">
+												<GitMerge className="mr-2 size-3.5" />
+												<div className="flex-1">
+													<div>Merge With AI</div>
+													<div className="text-[10px] text-muted-foreground">
+														Merge current branch into another branch
+													</div>
 												</div>
-											</div>
-										</DropdownMenuItem>
+											</DropdownMenuSubTrigger>
+											<DropdownMenuSubContent className="max-h-[300px] overflow-y-auto">
+												{branchData?.local
+													.filter(b => b.branch !== currentBranch)
+													.map(({ branch }) => (
+														<DropdownMenuItem
+															key={branch}
+															onClick={() => {
+																onCloseDiffSidebar?.();
+																onMergeWithAi(branch);
+															}}
+															disabled={isMergingWithAi}
+															className="text-xs"
+														>
+															<LuGitBranch className="mr-2 size-3.5" />
+															<span className="truncate">{branch}</span>
+														</DropdownMenuItem>
+													))}
+											</DropdownMenuSubContent>
+										</DropdownMenuSub>
 									</>
 								)}
 
@@ -985,25 +1000,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 				</DropdownMenu>
 			</div>
 		</div>
-
-		{/* Merge branch dialog */}
-		{branchData && (
-			<MergeBranchDialog
-				open={mergeBranchDialogOpen}
-				onOpenChange={setMergeBranchDialogOpen}
-				worktreePath={worktreePath}
-				currentBranch={currentBranch}
-				localBranches={branchData.local.map(b => b.branch)}
-				defaultBranch={branchData.defaultBranch}
-				onMergeComplete={() => {
-					refetchBranches();
-					onRefresh?.();
-				}}
-				onMergeWithAi={onMergeWithAi}
-				isMergingWithAi={isMergingWithAi}
-				onCloseDiffSidebar={onClose}
-			/>
-		)}
 		</>
 	);
 })
