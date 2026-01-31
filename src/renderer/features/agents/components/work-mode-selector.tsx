@@ -7,6 +7,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../../components/ui/popover"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../../components/ui/tooltip"
 import { IconChevronDown, CheckIcon, LaptopIcon } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
 import type { WorkMode } from "../atoms"
@@ -15,6 +21,8 @@ interface WorkModeSelectorProps {
   value: WorkMode
   onChange: (mode: WorkMode) => void
   disabled?: boolean
+  disabledOptions?: WorkMode[]
+  disabledReasons?: Partial<Record<WorkMode, string>>
 }
 
 const workModeOptions = [
@@ -34,13 +42,16 @@ export function WorkModeSelector({
   value,
   onChange,
   disabled,
+  disabledOptions = [],
+  disabledReasons = {},
 }: WorkModeSelectorProps) {
   const [open, setOpen] = useState(false)
   const selectedOption = workModeOptions.find((opt) => opt.id === value) || workModeOptions[1]
   const Icon = selectedOption.icon
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <TooltipProvider>
+      <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -59,18 +70,25 @@ export function WorkModeSelector({
         {workModeOptions.map((option) => {
           const OptionIcon = option.icon
           const isSelected = value === option.id
-          return (
+          const isDisabled = disabledOptions.includes(option.id)
+          const disabledReason = disabledReasons[option.id]
+
+          const button = (
             <button
               key={option.id}
               onClick={() => {
+                if (isDisabled) return
                 onChange(option.id)
                 setOpen(false)
               }}
+              disabled={isDisabled}
               className={cn(
-                "flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] text-sm text-left rounded-md cursor-default select-none outline-none transition-colors",
-                isSelected
+                "flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] text-sm text-left rounded-md select-none outline-none transition-colors",
+                isDisabled && "opacity-50 cursor-not-allowed",
+                !isDisabled && "cursor-default",
+                isSelected && !isDisabled
                   ? "dark:bg-neutral-800 text-foreground"
-                  : "dark:hover:bg-neutral-800 hover:text-foreground"
+                  : !isDisabled && "dark:hover:bg-neutral-800 hover:text-foreground"
               )}
             >
               <OptionIcon className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -78,8 +96,24 @@ export function WorkModeSelector({
               {isSelected && <CheckIcon className="h-4 w-4 shrink-0" />}
             </button>
           )
+
+          if (isDisabled && disabledReason) {
+            return (
+              <Tooltip key={option.id} delayDuration={300}>
+                <TooltipTrigger asChild>
+                  {button}
+                </TooltipTrigger>
+                <TooltipContent side="right" align="center">
+                  <p className="text-xs">{disabledReason}</p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          }
+
+          return button
         })}
       </PopoverContent>
     </Popover>
+    </TooltipProvider>
   )
 }
