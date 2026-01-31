@@ -230,6 +230,33 @@ export const appSettings = sqliteTable("app_settings", {
   ),
 })
 
+// ============ DEVSPACE SETTINGS ============
+// Stores configurable settings for DevSpace integration
+export const devspaceSettings = sqliteTable("devspace_settings", {
+  id: text("id").primaryKey().default("default"), // Single row, always "default"
+  reposPath: text("repos_path"), // Path to check for repos (replaces $VIDYARD_PATH)
+  configSubPath: text("config_sub_path").notNull().default("devspace.yaml"), // Sub path to check for devspace config (e.g., "devspace.yaml" or "deploy/devspace.yaml")
+  startCommand: text("start_command").notNull().default("devspace dev"), // Command to run (defaults to "devspace dev", replaces "dy dev")
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
+// ============ DEVSPACE STARTED PROCESSES ============
+// Tracks processes started by this application
+export const devspaceStartedProcesses = sqliteTable("devspace_started_processes", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  pid: integer("pid").notNull(), // Process ID
+  serviceName: text("service_name").notNull(), // Name of the service
+  servicePath: text("service_path").notNull(), // Path to the service
+  terminalPaneId: text("terminal_pane_id"), // Associated terminal pane ID (for terminal integration)
+  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
@@ -249,3 +276,7 @@ export type BackgroundTask = typeof backgroundTasks.$inferSelect
 export type NewBackgroundTask = typeof backgroundTasks.$inferInsert
 export type AppSettings = typeof appSettings.$inferSelect
 export type NewAppSettings = typeof appSettings.$inferInsert
+export type DevspaceSettings = typeof devspaceSettings.$inferSelect
+export type NewDevspaceSettings = typeof devspaceSettings.$inferInsert
+export type DevspaceStartedProcess = typeof devspaceStartedProcesses.$inferSelect
+export type NewDevspaceStartedProcess = typeof devspaceStartedProcesses.$inferInsert

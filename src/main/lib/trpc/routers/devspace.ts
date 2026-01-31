@@ -4,8 +4,12 @@
 import { z } from "zod"
 import { exec, spawn } from "child_process"
 import { promisify } from "util"
+import { readdir, stat, access } from "fs/promises"
+import { join } from "path"
 import { router, publicProcedure } from "../index"
 import { observable } from "@trpc/server/observable"
+import { getDatabase, devspaceSettings, devspaceStartedProcesses } from "../../db"
+import { eq } from "drizzle-orm"
 
 const execAsync = promisify(exec)
 
@@ -14,6 +18,9 @@ export interface DevSpaceProcess {
   command: string
   workingDir: string
   startTime: string
+  isOurs: boolean // Whether this process was started by our app
+  serviceName?: string // Service name if started by us
+  terminalPaneId?: string // Terminal pane ID if associated
 }
 
 export interface DevSpaceLogEntry {
@@ -21,6 +28,18 @@ export interface DevSpaceLogEntry {
   level: "info" | "warn" | "error" | "debug"
   message: string
   raw: string
+}
+
+export interface DevspaceService {
+  name: string
+  path: string
+  hasDevConfig: boolean
+}
+
+export interface DevspaceSettingsData {
+  reposPath: string | null
+  configSubPath: string
+  startCommand: string
 }
 
 /**
@@ -103,11 +122,247 @@ async function getProcessStartTime(pid: number): Promise<string> {
   }
 }
 
+/**
+ * Check if a directory has devspace configuration at the specified sub path
+ */
+async function hasDevspaceConfig(dirPath: string, configSubPath: string): Promise<boolean> {
+  // Check the configured sub path
+  const configPaths = [configSubPath]
+
+  // Also check common fallbacks if the config path is specific
+  if (!configSubPath.includes("/")) {
+    // It's a single filename, also check deploy/ subdirectory
+    configPaths.push(`deploy/${configSubPath}`)
+  }
+
+  for (const configPath of configPaths) {
+    try {
+      await access(join(dirPath, configPath))
+      return true
+    } catch {
+      // File doesn't exist, try next
+    }
+  }
+
+  return false
+}
+
+/**
+ * Get devspace settings from database
+ */
+function getDevspaceSettingsFromDb(): DevspaceSettingsData {
+  const db = getDatabase()
+  let settings = db
+    .select()
+    .from(devspaceSettings)
+    .where(eq(devspaceSettings.id, "default"))
+    .get()
+
+  if (!settings) {
+    // Create default settings
+    db.insert(devspaceSettings)
+      .values({
+        id: "default",
+        reposPath: null,
+        configSubPath: "devspace.yaml",
+        startCommand: "devspace dev",
+      })
+      .run()
+    settings = {
+      id: "default",
+      reposPath: null,
+      configSubPath: "devspace.yaml",
+      startCommand: "devspace dev",
+      updatedAt: new Date(),
+    }
+  }
+
+  return {
+    reposPath: settings.reposPath,
+    configSubPath: settings.configSubPath,
+    startCommand: settings.startCommand,
+  }
+}
+
+/**
+ * Get repos path from settings, falling back to $VIDYARD_PATH for backward compatibility
+ */
+async function getReposPath(): Promise<string | null> {
+  const settings = getDevspaceSettingsFromDb()
+
+  // If settings has a repos path, use it
+  if (settings.reposPath) {
+    return settings.reposPath
+  }
+
+  // Fallback: try environment variable for backward compatibility
+  if (process.env.VIDYARD_PATH) {
+    return process.env.VIDYARD_PATH
+  }
+
+  // Try to get from user's shell
+  try {
+    const { stdout } = await execAsync(
+      'bash -ilc "echo $VIDYARD_PATH"',
+      { timeout: 5000 }
+    )
+    const path = stdout.trim()
+    if (path && path !== "$VIDYARD_PATH") {
+      return path
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  return null
+}
+
+/**
+ * List available services from configured repos path
+ */
+async function listDevspaceServices(): Promise<DevspaceService[]> {
+  const reposPath = await getReposPath()
+
+  if (!reposPath) {
+    return []
+  }
+
+  const settings = getDevspaceSettingsFromDb()
+
+  try {
+    const entries = await readdir(reposPath, { withFileTypes: true })
+    const services: DevspaceService[] = []
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) {
+        continue
+      }
+
+      const servicePath = join(reposPath, entry.name)
+      const hasConfig = await hasDevspaceConfig(servicePath, settings.configSubPath)
+
+      services.push({
+        name: entry.name,
+        path: servicePath,
+        hasDevConfig: hasConfig,
+      })
+    }
+
+    // Sort by name
+    services.sort((a, b) => a.name.localeCompare(b.name))
+
+    return services
+  } catch (error) {
+    console.error("[devspace] Failed to list services:", error)
+    return []
+  }
+}
+
+/**
+ * Check if a process is still running
+ */
+async function isProcessRunning(pid: number): Promise<boolean> {
+  try {
+    await execAsync(`kill -0 ${pid}`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Clean up stale process records (processes that are no longer running)
+ */
+async function cleanupStaleProcesses() {
+  const db = getDatabase()
+  const processes = db.select().from(devspaceStartedProcesses).all()
+
+  for (const proc of processes) {
+    const running = await isProcessRunning(proc.pid)
+    if (!running) {
+      db.delete(devspaceStartedProcesses)
+        .where(eq(devspaceStartedProcesses.id, proc.id))
+        .run()
+    }
+  }
+}
+
 export const devspaceRouter = router({
+  // ============ SETTINGS ============
+
+  /**
+   * Get devspace settings
+   */
+  getSettings: publicProcedure.query(async (): Promise<DevspaceSettingsData & { effectiveReposPath: string | null }> => {
+    const settings = getDevspaceSettingsFromDb()
+    const effectiveReposPath = await getReposPath()
+
+    return {
+      ...settings,
+      effectiveReposPath,
+    }
+  }),
+
+  /**
+   * Update devspace settings
+   */
+  updateSettings: publicProcedure
+    .input(
+      z.object({
+        reposPath: z.string().nullable().optional(),
+        configSubPath: z.string().optional(),
+        startCommand: z.string().optional(),
+      })
+    )
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Check if settings exist
+      const existing = db
+        .select()
+        .from(devspaceSettings)
+        .where(eq(devspaceSettings.id, "default"))
+        .get()
+
+      if (existing) {
+        db.update(devspaceSettings)
+          .set({
+            ...(input.reposPath !== undefined && { reposPath: input.reposPath }),
+            ...(input.configSubPath !== undefined && { configSubPath: input.configSubPath }),
+            ...(input.startCommand !== undefined && { startCommand: input.startCommand }),
+            updatedAt: new Date(),
+          })
+          .where(eq(devspaceSettings.id, "default"))
+          .run()
+      } else {
+        db.insert(devspaceSettings)
+          .values({
+            id: "default",
+            reposPath: input.reposPath ?? null,
+            configSubPath: input.configSubPath ?? "devspace.yaml",
+            startCommand: input.startCommand ?? "devspace dev",
+          })
+          .run()
+      }
+
+      return { success: true }
+    }),
+
+  // ============ PROCESS MANAGEMENT ============
+
   /**
    * List all active devspace processes on the system
+   * Marks processes started by our app with isOurs=true
    */
   listProcesses: publicProcedure.query(async (): Promise<DevSpaceProcess[]> => {
+    // First, clean up stale process records
+    await cleanupStaleProcesses()
+
+    // Get our started processes from DB
+    const db = getDatabase()
+    const ourProcesses = db.select().from(devspaceStartedProcesses).all()
+    const ourPids = new Set(ourProcesses.map(p => p.pid))
+
     try {
       // Find devspace processes - look for "devspace" command with sync-related args
       const { stdout } = await execAsync(
@@ -140,11 +395,17 @@ export const devspaceRouter = router({
           getProcessStartTime(pid),
         ])
 
+        // Check if this is one of our processes
+        const ourProcess = ourProcesses.find(p => p.pid === pid)
+
         processes.push({
           pid,
           command,
           workingDir,
           startTime,
+          isOurs: ourPids.has(pid),
+          serviceName: ourProcess?.serviceName,
+          terminalPaneId: ourProcess?.terminalPaneId || undefined,
         })
       }
 
@@ -154,6 +415,90 @@ export const devspaceRouter = router({
       return []
     }
   }),
+
+  /**
+   * List only processes started by our app
+   */
+  listOurProcesses: publicProcedure.query(async (): Promise<DevSpaceProcess[]> => {
+    // First, clean up stale process records
+    await cleanupStaleProcesses()
+
+    const db = getDatabase()
+    const ourProcesses = db.select().from(devspaceStartedProcesses).all()
+
+    const processes: DevSpaceProcess[] = []
+
+    for (const proc of ourProcesses) {
+      const running = await isProcessRunning(proc.pid)
+      if (!running) continue
+
+      const [workingDir, startTime] = await Promise.all([
+        getProcessWorkingDir(proc.pid),
+        getProcessStartTime(proc.pid),
+      ])
+
+      processes.push({
+        pid: proc.pid,
+        command: `devspace dev (${proc.serviceName})`,
+        workingDir,
+        startTime,
+        isOurs: true,
+        serviceName: proc.serviceName,
+        terminalPaneId: proc.terminalPaneId || undefined,
+      })
+    }
+
+    return processes
+  }),
+
+  /**
+   * Register a started process (called after terminal creates the process)
+   */
+  registerStartedProcess: publicProcedure
+    .input(
+      z.object({
+        pid: z.number(),
+        serviceName: z.string(),
+        servicePath: z.string(),
+        terminalPaneId: z.string().optional(),
+      })
+    )
+    .mutation(({ input }) => {
+      const db = getDatabase()
+
+      // Check if already registered
+      const existing = db
+        .select()
+        .from(devspaceStartedProcesses)
+        .where(eq(devspaceStartedProcesses.pid, input.pid))
+        .get()
+
+      if (!existing) {
+        db.insert(devspaceStartedProcesses)
+          .values({
+            pid: input.pid,
+            serviceName: input.serviceName,
+            servicePath: input.servicePath,
+            terminalPaneId: input.terminalPaneId,
+          })
+          .run()
+      }
+
+      return { success: true }
+    }),
+
+  /**
+   * Unregister a process (called when process exits)
+   */
+  unregisterProcess: publicProcedure
+    .input(z.object({ pid: z.number() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      db.delete(devspaceStartedProcesses)
+        .where(eq(devspaceStartedProcesses.pid, input.pid))
+        .run()
+      return { success: true }
+    }),
 
   /**
    * Stream logs from a specific devspace process
@@ -308,6 +653,8 @@ export const devspaceRouter = router({
       })
     }),
 
+  // ============ SERVICES ============
+
   /**
    * Check if devspace CLI is available
    */
@@ -331,4 +678,87 @@ export const devspaceRouter = router({
       return null
     }
   }),
+
+  /**
+   * List available services from configured repos path
+   */
+  listDevspaceServices: publicProcedure.query(
+    async (): Promise<DevspaceService[]> => {
+      return listDevspaceServices()
+    }
+  ),
+
+  /**
+   * Get service info for starting
+   */
+  getServiceInfo: publicProcedure
+    .input(
+      z.object({
+        serviceName: z.string(),
+      })
+    )
+    .query(
+      async ({
+        input,
+      }): Promise<{ path: string; command: string } | null> => {
+        const reposPath = await getReposPath()
+
+        if (!reposPath) {
+          return null
+        }
+
+        const settings = getDevspaceSettingsFromDb()
+        const servicePath = join(reposPath, input.serviceName)
+
+        try {
+          const stats = await stat(servicePath)
+          if (!stats.isDirectory()) {
+            return null
+          }
+
+          return {
+            path: servicePath,
+            command: settings.startCommand,
+          }
+        } catch {
+          return null
+        }
+      }
+    ),
+
+  // Keep old alias for backward compatibility
+  getDevyardServiceInfo: publicProcedure
+    .input(
+      z.object({
+        serviceName: z.string(),
+      })
+    )
+    .query(
+      async ({
+        input,
+      }): Promise<{ path: string; command: string } | null> => {
+        const reposPath = await getReposPath()
+
+        if (!reposPath) {
+          return null
+        }
+
+        const settings = getDevspaceSettingsFromDb()
+        const servicePath = join(reposPath, input.serviceName)
+
+        try {
+          const stats = await stat(servicePath)
+          if (!stats.isDirectory()) {
+            return null
+          }
+
+          return {
+            path: servicePath,
+            command: settings.startCommand,
+          }
+        } catch {
+          return null
+        }
+      }
+    ),
 })

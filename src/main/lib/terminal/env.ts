@@ -304,6 +304,9 @@ const ALLOWED_ENV_VARS = new Set([
   "CLAUDE_CONFIG_DIR",
   "CLAUDE_PLUGIN_DIR",
 
+  // Vidyard development
+  "VIDYARD_PATH",
+
   // Cloud CLI tools
   "CLOUDSDK_CONFIG",
   "AZURE_CONFIG_DIR",

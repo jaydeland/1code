@@ -183,6 +183,13 @@
       "when": 1769795264054,
       "tag": "0025_furry_thunderbird",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1769889708938,
+      "tag": "0026_dapper_jack_power",
+      "breakpoints": true
     }
   ]
 }

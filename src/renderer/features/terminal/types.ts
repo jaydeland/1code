@@ -40,4 +40,8 @@ export interface TerminalInstance {
   name: string
   /** Creation timestamp */
   createdAt: number
+  /** Optional custom working directory for this terminal */
+  cwd?: string
+  /** Optional initial commands to run when terminal is created */
+  initialCommands?: string[]
 }

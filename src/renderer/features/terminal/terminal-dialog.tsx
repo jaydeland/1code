@@ -20,6 +20,7 @@ import {
   dialogTerminalsAtom,
   dialogActiveTerminalIdAtom,
   terminalCwdAtom,
+  createTerminalRequestAtom,
 } from "./atoms"
 import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "./types"
@@ -65,6 +66,7 @@ export function TerminalDialog() {
   )
   const terminalCwds = useAtomValue(terminalCwdAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
+  const [createRequest, setCreateRequest] = useAtom(createTerminalRequestAtom)
 
   // Get cwd from selected project
   const cwd = useMemo(() => {
@@ -259,6 +261,33 @@ export function TerminalDialog() {
     }
   }, [isOpen, terminals.length, createTerminal])
 
+  // Handle external request to create a terminal with custom properties
+  useEffect(() => {
+    if (createRequest) {
+      const currentTerminals = terminalsRef.current
+
+      const id = generateTerminalId()
+      const paneId = generatePaneId(id)
+      const name = createRequest.name || getNextTerminalName(currentTerminals)
+
+      const newTerminal: TerminalInstance = {
+        id,
+        paneId,
+        name,
+        createdAt: Date.now(),
+        cwd: createRequest.cwd,
+        initialCommands: createRequest.initialCommands,
+      }
+
+      setTerminals((prev) => [...prev, newTerminal])
+      setActiveTerminalId(id)
+      setIsOpen(true)
+
+      // Clear the request
+      setCreateRequest(null)
+    }
+  }, [createRequest, setTerminals, setActiveTerminalId, setIsOpen, setCreateRequest])
+
   // Keyboard shortcut: Cmd+` to toggle terminal dialog
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -382,9 +411,10 @@ export function TerminalDialog() {
                   >
                     <Terminal
                       paneId={activeTerminal.paneId}
-                      cwd={cwd}
+                      cwd={activeTerminal.cwd || cwd}
                       workspaceId={DIALOG_PREFIX}
-                      initialCwd={cwd}
+                      initialCwd={activeTerminal.cwd || cwd}
+                      initialCommands={activeTerminal.initialCommands}
                     />
                   </motion.div>
                 ) : (

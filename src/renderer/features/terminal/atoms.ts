@@ -82,3 +82,16 @@ export const dialogActiveTerminalIdAtom = atomWithStorage<string | null>(
   undefined,
   { getOnInit: true },
 )
+
+/**
+ * Request to create a new terminal with custom properties.
+ * Set this atom to create a terminal and open the dialog.
+ * The value should be an object with optional cwd, name, and initialCommands.
+ */
+export interface CreateTerminalRequest {
+  name?: string
+  cwd?: string
+  initialCommands?: string[]
+}
+
+export const createTerminalRequestAtom = atom<CreateTerminalRequest | null>(null)
