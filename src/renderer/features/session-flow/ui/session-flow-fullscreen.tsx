@@ -1,17 +1,15 @@
-import { useAtom } from "jotai"
 import { Button } from "@/components/ui/button"
 import { DialogIcons, DialogIconSizes } from "@/lib/dialog-icons"
-import { sessionFlowFullScreenAtom } from "../atoms"
 import { SessionFlowPanel } from "./session-flow-panel"
 
 interface SessionFlowFullScreenProps {
+  isOpen: boolean
+  onClose: () => void
   onScrollToMessage: (messageId: string, partIndex?: number) => void
 }
 
-export function SessionFlowFullScreen({ onScrollToMessage }: SessionFlowFullScreenProps) {
-  const [fullScreen, setFullScreen] = useAtom(sessionFlowFullScreenAtom)
-
-  if (!fullScreen) return null
+export function SessionFlowFullScreen({ isOpen, onClose, onScrollToMessage }: SessionFlowFullScreenProps) {
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -21,7 +19,7 @@ export function SessionFlowFullScreen({ onScrollToMessage }: SessionFlowFullScre
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setFullScreen(false)}
+          onClick={onClose}
           aria-label="Exit full screen"
         >
           <DialogIcons.Close className={DialogIconSizes.default} />

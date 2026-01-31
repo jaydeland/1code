@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { atom } from "jotai"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import {
 import { Download } from "lucide-react"
 import { DialogIcons, DialogIconSizes } from "@/lib/dialog-icons"
 import { SessionFlowPanel } from "./session-flow-panel"
+import { SessionFlowViewModeSwitcher } from "./session-flow-view-mode-switcher"
 // NOTE: Todos, SubAgents, and Tasks have been moved to the SessionStatusBar component
 // in the chat input area for better accessibility and UX.
 // NOTE: SubAgentOutputDialog is now rendered in active-chat.tsx
@@ -18,7 +19,9 @@ import { SessionFlowPanel } from "./session-flow-panel"
 // This prevents issues where the dialog state (Jotai atoms) would persist but the component would unmount,
 // causing problems when the sidebar reopens with stale dialog state.
 import {
+  sessionFlowDisplayModeAtom,
   sessionFlowSidebarOpenAtom,
+  sessionFlowSidebarOpenRuntimeAtom,
   sessionFlowSidebarWidthAtom,
   sessionFlowDialogOpenAtom,
   sessionFlowFullScreenAtom,
@@ -37,7 +40,9 @@ interface SessionFlowSidebarProps {
 }
 
 export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProps) {
+  const [displayMode, setDisplayMode] = useAtom(sessionFlowDisplayModeAtom)
   const [isOpen, setIsOpen] = useAtom(sessionFlowSidebarOpenAtom)
+  const setRuntimeOpen = useSetAtom(sessionFlowSidebarOpenRuntimeAtom)
   const [dialogOpen, setDialogOpen] = useAtom(sessionFlowDialogOpenAtom)
   const [fullScreen, setFullScreen] = useAtom(sessionFlowFullScreenAtom)
 
@@ -54,16 +59,24 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
   const messages = useAtomValue(allMessages)
 
   const closeSidebar = useCallback(() => {
-    setIsOpen(false)
-  }, [setIsOpen])
+    if (displayMode === "side-peek") {
+      setIsOpen(false)
+    } else {
+      setRuntimeOpen(false)
+    }
+  }, [displayMode, setIsOpen, setRuntimeOpen])
 
-  const openDialog = useCallback(() => {
-    setDialogOpen(true)
-  }, [setDialogOpen])
-
-  const toggleFullScreen = useCallback(() => {
-    setFullScreen(!fullScreen)
-  }, [fullScreen, setFullScreen])
+  const handleModeChange = useCallback((newMode: "side-peek" | "center-peek" | "full-page") => {
+    setDisplayMode(newMode)
+    // When changing to side-peek, use persisted open state
+    // When changing to dialog/fullscreen, use runtime state
+    if (newMode === "side-peek") {
+      setIsOpen(true)
+      setRuntimeOpen(false)
+    } else {
+      setRuntimeOpen(true)
+    }
+  }, [setDisplayMode, setIsOpen, setRuntimeOpen])
 
   // Handle export as PNG
   const handleExportPNG = useCallback(() => {
@@ -123,35 +136,11 @@ export function SessionFlowSidebar({ onScrollToMessage }: SessionFlowSidebarProp
           {/* Export and View Options */}
           <div className="flex-1" />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={openDialog}
-                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                aria-label="Open in dialog"
-              >
-                <DialogIcons.OpenDialog className={DialogIconSizes.small} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Open in dialog</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleFullScreen}
-                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                aria-label="Toggle full screen"
-              >
-                <DialogIcons.FullScreen className={DialogIconSizes.small} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Toggle full screen</TooltipContent>
-          </Tooltip>
+          {/* Display Mode Switcher */}
+          <SessionFlowViewModeSwitcher
+            mode={displayMode}
+            onModeChange={handleModeChange}
+          />
 
           <DropdownMenu>
             <Tooltip>

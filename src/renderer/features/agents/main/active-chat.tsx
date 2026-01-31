@@ -100,9 +100,7 @@ import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
 import { sessionFlowSidebarOpenAtom, sessionFlowBottomTabAtom } from "../../session-flow/atoms"
-import { SessionFlowSidebar } from "../../session-flow/ui/session-flow-sidebar"
-import { SessionFlowDialog } from "../../session-flow/ui/session-flow-dialog"
-import { SessionFlowFullScreen } from "../../session-flow/ui/session-flow-fullscreen"
+import { SessionFlowRenderer } from "../../session-flow/ui/session-flow-renderer"
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
 import { FileContentDialog } from "../ui/file-content-dialog"
 import {
@@ -5867,17 +5865,11 @@ Make sure to preserve all functionality from both branches when resolving confli
           initialCommands={startCommands.length > 0 ? startCommands : undefined}
         />
 
-        {/* Session Flow Sidebar - shows session execution flow */}
-        <SessionFlowSidebar onScrollToMessage={handleScrollToMessage} />
-
-        {/* Session Flow Dialog - modal view */}
-        <SessionFlowDialog onScrollToMessage={handleScrollToMessage} />
-
-        {/* Session Flow Full Screen - full screen view */}
-        <SessionFlowFullScreen onScrollToMessage={handleScrollToMessage} />
+        {/* Session Flow - unified renderer supporting side-peek, center-peek, and full-page modes */}
+        <SessionFlowRenderer onScrollToMessage={handleScrollToMessage} />
 
         {/* Sub-agent output dialog - rendered here to stay mounted */}
-        {/* This must be outside SessionFlowSidebar to prevent unmount issues when sidebar closes */}
+        {/* This must be outside SessionFlowRenderer to prevent unmount issues when sidebar closes */}
         <SubAgentOutputDialog chatId={chatId} />
 
         {/* File content dialog - for viewing file contents from Read tool */}

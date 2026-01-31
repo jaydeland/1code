@@ -958,6 +958,7 @@ interface SidebarHeaderProps {
   isDesktop: boolean
   isFullscreen: boolean | null
   isMobileFullscreen: boolean
+  isSidebarHovered: boolean
   userId: string | null | undefined
   desktopUser: { id: string; email: string; name?: string } | null
   onSignOut: () => void
@@ -974,6 +975,7 @@ const SidebarHeader = memo(function SidebarHeader({
   isDesktop,
   isFullscreen,
   isMobileFullscreen,
+  isSidebarHovered,
   userId,
   desktopUser,
   onSignOut,
@@ -1008,7 +1010,7 @@ const SidebarHeader = memo(function SidebarHeader({
 
       {/* Custom traffic lights - positioned at top left, centered in 32px area */}
       <TrafficLights
-        isHovered={isDropdownOpen}
+        isHovered={isSidebarHovered}
         isFullscreen={isFullscreen}
         isDesktop={isDesktop}
         className="absolute left-4 top-[14px] z-20"
@@ -1357,8 +1359,9 @@ export function AgentsSidebar({
   const [selectedDraftId, setSelectedDraftId] = useAtom(selectedDraftIdAtom)
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const pendingQuestions = useAtomValue(pendingUserQuestionsAtom)
-  // Use ref instead of state to avoid re-renders on hover
+  // Track sidebar hover state (both ref for performance and state for TrafficLights)
   const isSidebarHoveredRef = useRef(false)
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false)
   const closeButtonRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [focusedChatIndex, setFocusedChatIndex] = useState<number>(-1) // -1 means no focus
@@ -2162,9 +2165,10 @@ export function AgentsSidebar({
     }
   }, [])
 
-  // Update sidebar hover UI via DOM manipulation (no state update to avoid re-renders)
+  // Update sidebar hover UI via DOM manipulation and state
   const updateSidebarHoverUI = useCallback((hovered: boolean) => {
     isSidebarHoveredRef.current = hovered
+    setIsSidebarHovered(hovered)
     // Update close button opacity
     if (closeButtonRef.current) {
       closeButtonRef.current.style.opacity = hovered ? "1" : "0"
@@ -2385,6 +2389,7 @@ export function AgentsSidebar({
         isDesktop={isDesktop}
         isFullscreen={isFullscreen}
         isMobileFullscreen={isMobileFullscreen}
+        isSidebarHovered={isSidebarHovered}
         userId={userId}
         desktopUser={desktopUser}
         onSignOut={onSignOut}

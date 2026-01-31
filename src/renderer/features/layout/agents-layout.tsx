@@ -294,8 +294,8 @@ export function AgentsLayout() {
             <AgentsContent />
           </div>
 
-          {/* Right Icon Bar (desktop only) */}
-          {!isMobile && (
+          {/* Right Icon Bar (desktop only, chat session view only) */}
+          {!isMobile && selectedSidebarTab === "chats" && selectedChatId && (
             <div className="flex-shrink-0 bg-background">
               <RightIconBar />
             </div>

@@ -579,7 +579,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   return (
     <div
       className={cn(
-        "mx-2",
+        "mx-2 outline outline-1 outline-border/50 rounded-lg",
         // Make entire creation todo sticky
         isCreationToolCall && "sticky bg-background"
       )}

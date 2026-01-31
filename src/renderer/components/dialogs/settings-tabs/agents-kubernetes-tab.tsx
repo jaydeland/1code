@@ -3,11 +3,14 @@ import { useState, useEffect } from "react"
 import {
   clustersFeatureEnabledAtom,
   clustersDefaultNamespaceAtom,
+  devspaceFeatureEnabledAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Switch } from "../../ui/switch"
 import { Input } from "../../ui/input"
-import { Server } from "lucide-react"
+import { Button } from "../../ui/button"
+import { Label } from "../../ui/label"
+import { Server, Loader2, FolderOpen, Settings, ChevronDown, ChevronUp } from "lucide-react"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -26,12 +29,164 @@ function useIsNarrowScreen(): boolean {
   return isNarrow
 }
 
+// DevSpace Settings Component
+function DevSpaceSettings() {
+  const utils = trpc.useUtils()
+  const { data: settings, isLoading } = trpc.devspace.getSettings.useQuery()
+  const updateMutation = trpc.devspace.updateSettings.useMutation({
+    onSuccess: () => {
+      utils.devspace.getSettings.invalidate()
+      utils.devspace.listDevspaceServices.invalidate()
+    },
+  })
+
+  const [localReposPath, setLocalReposPath] = useState("")
+  const [localConfigSubPath, setLocalConfigSubPath] = useState("")
+  const [localStartCommand, setLocalStartCommand] = useState("")
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  // Sync local state with server data
+  useEffect(() => {
+    if (settings) {
+      setLocalReposPath(settings.reposPath || "")
+      setLocalConfigSubPath(settings.configSubPath)
+      setLocalStartCommand(settings.startCommand)
+    }
+  }, [settings])
+
+  const handleSave = () => {
+    updateMutation.mutate({
+      reposPath: localReposPath.trim() || null,
+      configSubPath: localConfigSubPath.trim() || "devspace.yaml",
+      startCommand: localStartCommand.trim() || "devspace dev",
+    })
+  }
+
+  const hasChanges = settings && (
+    (localReposPath.trim() || null) !== settings.reposPath ||
+    localConfigSubPath.trim() !== settings.configSubPath ||
+    localStartCommand.trim() !== settings.startCommand
+  )
+
+  return (
+    <div className="bg-background rounded-lg border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">DevSpace Configuration</span>
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        )}
+      </button>
+
+      {isExpanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-border">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading settings...
+            </div>
+          ) : (
+            <div className="space-y-4 pt-4">
+              {/* Repos Path */}
+              <div className="space-y-2">
+                <Label htmlFor="devspace-repos-path" className="text-xs font-medium">
+                  Repos Path
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="devspace-repos-path"
+                    value={localReposPath}
+                    onChange={(e) => setLocalReposPath(e.target.value)}
+                    placeholder={settings?.effectiveReposPath || "e.g., /Users/you/repos"}
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="flex-shrink-0"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                  </Button>
+                </div>
+                {settings?.effectiveReposPath && !localReposPath && (
+                  <p className="text-xs text-muted-foreground">
+                    Using environment variable: {settings.effectiveReposPath}
+                  </p>
+                )}
+              </div>
+
+              {/* Config Sub Path */}
+              <div className="space-y-2">
+                <Label htmlFor="devspace-config-path" className="text-xs font-medium">
+                  Config File Path
+                </Label>
+                <Input
+                  id="devspace-config-path"
+                  value={localConfigSubPath}
+                  onChange={(e) => setLocalConfigSubPath(e.target.value)}
+                  placeholder="devspace.yaml"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Path relative to service root (e.g., "devspace.yaml" or "deploy/devspace.yaml")
+                </p>
+              </div>
+
+              {/* Start Command */}
+              <div className="space-y-2">
+                <Label htmlFor="devspace-start-command" className="text-xs font-medium">
+                  Start Command
+                </Label>
+                <Input
+                  id="devspace-start-command"
+                  value={localStartCommand}
+                  onChange={(e) => setLocalStartCommand(e.target.value)}
+                  placeholder="devspace dev"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Command to run when starting a service (e.g., "devspace dev", "dy dev")
+                </p>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={!hasChanges || updateMutation.isPending}
+                >
+                  {updateMutation.isPending && (
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  )}
+                  Save Settings
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AgentsKubernetesTab() {
   const isNarrowScreen = useIsNarrowScreen()
 
   // Clusters feature state
   const [clustersEnabled, setClustersEnabled] = useAtom(clustersFeatureEnabledAtom)
   const [defaultNamespace, setDefaultNamespace] = useAtom(clustersDefaultNamespaceAtom)
+
+  // DevSpace feature state
+  const [devspaceEnabled, setDevspaceEnabled] = useAtom(devspaceFeatureEnabledAtom)
 
   // Get derived namespace from email env vars or git config
   const { data: derivedNamespace } = trpc.clusters.getDefaultNamespace.useQuery(undefined, {
@@ -155,6 +310,34 @@ export function AgentsKubernetesTab() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Enable DevSpace Feature */}
+      <div className="bg-background rounded-lg border border-border overflow-hidden">
+        <div className="p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Enable DevSpace
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Local development environment management for microservices. Start and monitor DevSpace services.
+              </span>
+            </div>
+            <Switch
+              checked={devspaceEnabled}
+              onCheckedChange={setDevspaceEnabled}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* DevSpace Settings - only show when feature is enabled */}
+      {devspaceEnabled && (
+        <div className="space-y-4">
+          <DevSpaceSettings />
         </div>
       )}
     </div>

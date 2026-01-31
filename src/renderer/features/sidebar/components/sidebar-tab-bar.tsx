@@ -6,8 +6,7 @@ import {
   Terminal,
   TerminalSquare,
   Bot,
-  Sparkles,
-  Plug,
+  BookOpen,
   Server,
   History,
   PanelLeftClose,
@@ -15,6 +14,7 @@ import {
   FolderOpen,
   Rocket,
 } from "lucide-react"
+import { OriginalMCPIcon } from "../../../components/ui/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -39,8 +39,8 @@ const tabs: TabItem[] = [
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "commands", label: "Commands", icon: Terminal },
   { id: "agents", label: "Subagents", icon: Bot },
-  { id: "skills", label: "Skills", icon: Sparkles },
-  { id: "mcps", label: "MCPs", icon: Plug },
+  { id: "skills", label: "Skills", icon: BookOpen },
+  { id: "mcps", label: "MCPs", icon: OriginalMCPIcon },
   { id: "clusters", label: "Clusters", icon: Server },
   { id: "gsd", label: "GSD", icon: Rocket },
 ]

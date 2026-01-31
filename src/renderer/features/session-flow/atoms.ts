@@ -2,12 +2,23 @@ import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import { messageIdsAtom, messageAtomFamily } from "../agents/stores/message-store"
 
+// Display mode for session flow - matches changes/diff view pattern
+export const sessionFlowDisplayModeAtom = atomWithStorage<"side-peek" | "center-peek" | "full-page">(
+  "session-flow-display-mode",
+  "side-peek",
+  undefined,
+  { getOnInit: true },
+)
+
 export const sessionFlowSidebarOpenAtom = atomWithStorage<boolean>(
   "session-flow-sidebar-open",
   true,
   undefined,
   { getOnInit: true },
 )
+
+// Runtime-only open state for dialog and fullscreen modes (not persisted)
+export const sessionFlowSidebarOpenRuntimeAtom = atom<boolean>(false)
 
 // Live mode toggle - when off, flow chart freezes; when on, catches up and auto-follows
 export const sessionFlowLiveAtom = atomWithStorage<boolean>(

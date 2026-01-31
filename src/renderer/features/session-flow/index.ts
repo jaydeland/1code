@@ -1,6 +1,8 @@
 // Atoms
 export {
+  sessionFlowDisplayModeAtom,
   sessionFlowSidebarOpenAtom,
+  sessionFlowSidebarOpenRuntimeAtom,
   sessionFlowSidebarWidthAtom,
   sessionFlowTodosSplitAtom,
   sessionFlowTodosAtom,
@@ -23,6 +25,7 @@ export {
 } from "./atoms"
 
 // Components
+export { SessionFlowRenderer } from "./ui/session-flow-renderer"
 export { SessionFlowSidebar } from "./ui/session-flow-sidebar"
 export { SessionFlowPanel } from "./ui/session-flow-panel"
 export { SessionFlowTodos } from "./ui/session-flow-todos"

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useEffect } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { GitBranch, ListTree } from "lucide-react"
 import {
   Tooltip,
@@ -11,7 +11,11 @@ import {
 import { Kbd } from "../../components/ui/kbd"
 import { cn } from "../../lib/utils"
 import { selectedAgentChatIdAtom, diffSidebarOpenAtomFamily } from "../agents/atoms"
-import { sessionFlowSidebarOpenAtom } from "../session-flow/atoms"
+import {
+  sessionFlowDisplayModeAtom,
+  sessionFlowSidebarOpenAtom,
+  sessionFlowSidebarOpenRuntimeAtom,
+} from "../session-flow/atoms"
 import { workflowPanelOpenAtom } from "../workflows/atoms"
 import { trpc } from "../../lib/trpc"
 
@@ -47,11 +51,18 @@ export function RightIconBar({ className }: RightIconBarProps) {
   )
   const [isDiffOpen, setIsDiffOpen] = useAtom(diffSidebarAtom)
 
-  // Session flow sidebar state - global
+  // Session flow display mode and state
+  const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [isSessionFlowOpen, setIsSessionFlowOpen] = useAtom(sessionFlowSidebarOpenAtom)
+  const [sessionFlowRuntimeOpen, setSessionFlowRuntimeOpen] = useAtom(sessionFlowSidebarOpenRuntimeAtom)
 
   // Workflow panel state - global (for mutual exclusivity with Session Flow)
   const [workflowPanelOpen, setWorkflowPanelOpen] = useAtom(workflowPanelOpenAtom)
+
+  // Determine which session flow open state to use based on display mode
+  const effectiveSessionFlowOpen = sessionFlowDisplayMode === "side-peek"
+    ? isSessionFlowOpen
+    : sessionFlowRuntimeOpen
 
   // Auto-close Changes panel when switching to non-git repos
   useEffect(() => {
@@ -70,8 +81,10 @@ export function RightIconBar({ className }: RightIconBarProps) {
   }
 
   const handleSessionFlowClick = () => {
-    // Toggle session flow sidebar
-    if (!isSessionFlowOpen) {
+    // Toggle session flow based on display mode
+    const currentlyOpen = effectiveSessionFlowOpen
+
+    if (!currentlyOpen) {
       // Close diff and workflow panel when opening session flow
       if (selectedChatId) {
         setIsDiffOpen(false)
@@ -80,7 +93,13 @@ export function RightIconBar({ className }: RightIconBarProps) {
         setWorkflowPanelOpen(null)
       }
     }
-    setIsSessionFlowOpen(!isSessionFlowOpen)
+
+    // Toggle the appropriate state based on display mode
+    if (sessionFlowDisplayMode === "side-peek") {
+      setIsSessionFlowOpen(!isSessionFlowOpen)
+    } else {
+      setSessionFlowRuntimeOpen(!sessionFlowRuntimeOpen)
+    }
   }
 
   return (
@@ -126,12 +145,12 @@ export function RightIconBar({ className }: RightIconBarProps) {
               onClick={handleSessionFlowClick}
               className={cn(
                 "flex items-center justify-center rounded-md transition-all duration-150 ease-out h-8 w-8",
-                isSessionFlowOpen
+                effectiveSessionFlowOpen
                   ? "bg-foreground/10 text-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
               )}
               aria-label="Session Flow"
-              aria-pressed={isSessionFlowOpen}
+              aria-pressed={effectiveSessionFlowOpen}
             >
               <ListTree className="h-4 w-4 flex-shrink-0" />
             </button>

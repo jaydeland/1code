@@ -701,3 +701,12 @@ export const clustersDefaultNamespaceAtom = atomWithStorage<string | null>(
   undefined,
   { getOnInit: true },
 )
+
+// Feature flag for DevSpace feature - OFF by default
+// Enable via Settings > Kubernetes tab
+export const devspaceFeatureEnabledAtom = atomWithStorage<boolean>(
+  "preferences:devspace-feature-enabled",
+  false,
+  undefined,
+  { getOnInit: true },
+)
