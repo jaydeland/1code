@@ -134,3 +134,36 @@ export type ClusterTab = "dashboard" | "pvcs" | "pods" | "services" | "deploymen
  * Currently selected tab in cluster detail view
  */
 export const selectedClusterTabAtom = atom<ClusterTab>("dashboard")
+
+// ============================================
+// DEVSPACE TERMINALS STATE
+// ============================================
+
+export interface DevSpaceTerminalInstance {
+  id: string
+  paneId: string
+  serviceName: string
+  servicePath: string
+  createdAt: number
+}
+
+/**
+ * Active DevSpace terminal instances
+ * Persisted across navigation to keep terminals alive
+ */
+export const devspaceTerminalsAtom = atomWithStorage<DevSpaceTerminalInstance[]>(
+  "devspace-terminals",
+  [],
+  undefined,
+  { getOnInit: true }
+)
+
+/**
+ * Active terminal ID (which tab is selected)
+ */
+export const devspaceActiveTerminalIdAtom = atomWithStorage<string | null>(
+  "devspace-active-terminal-id",
+  null,
+  undefined,
+  { getOnInit: true }
+)

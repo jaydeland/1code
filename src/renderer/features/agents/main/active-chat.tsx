@@ -99,7 +99,12 @@ import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { getStatusIndicator } from "../../changes/utils/status"
 import { terminalSidebarOpenAtom } from "../../terminal/atoms"
 import { TerminalSidebar } from "../../terminal/terminal-sidebar"
-import { sessionFlowSidebarOpenAtom, sessionFlowBottomTabAtom } from "../../session-flow/atoms"
+import {
+  sessionFlowSidebarOpenAtom,
+  sessionFlowSidebarOpenRuntimeAtom,
+  sessionFlowDisplayModeAtom,
+  sessionFlowBottomTabAtom,
+} from "../../session-flow/atoms"
 import { SessionFlowRenderer } from "../../session-flow/ui/session-flow-renderer"
 import { SubAgentOutputDialog } from "../../session-flow/ui/sub-agent-output-dialog"
 import { FileContentDialog } from "../ui/file-content-dialog"
@@ -2069,6 +2074,8 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // Session flow state
   const [sessionFlowSidebarOpen, setSessionFlowSidebarOpen] = useAtom(sessionFlowSidebarOpenAtom)
+  const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
+  const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [, setSessionFlowBottomTab] = useAtom(sessionFlowBottomTabAtom)
 
   // Tasks panel visibility (deprecated - now uses session flow Tasks tab)
@@ -3749,6 +3756,8 @@ export function ChatView({
   const [isSessionFlowSidebarOpen, setIsSessionFlowSidebarOpen] = useAtom(
     sessionFlowSidebarOpenAtom,
   )
+  const sessionFlowRuntimeOpen = useAtomValue(sessionFlowSidebarOpenRuntimeAtom)
+  const sessionFlowDisplayMode = useAtomValue(sessionFlowDisplayModeAtom)
   const [diffStats, setDiffStatsRaw] = useState({
     fileCount: 0,
     additions: 0,
@@ -3838,6 +3847,20 @@ export function ChatView({
       window.desktopApi.setTrafficLightVisibility(false)
     }
   }, [isDiffSidebarOpen, diffDisplayMode, isDesktop, isFullscreen])
+
+  // Hide traffic lights when full-page session flow is open (they would overlap with content)
+  useEffect(() => {
+    if (!isDesktop || isFullscreen) return
+    if (typeof window === "undefined" || !window.desktopApi?.setTrafficLightVisibility) return
+
+    const sessionFlowOpen = sessionFlowDisplayMode === "side-peek"
+      ? isSessionFlowSidebarOpen
+      : sessionFlowRuntimeOpen
+
+    if (sessionFlowOpen && sessionFlowDisplayMode === "full-page") {
+      window.desktopApi.setTrafficLightVisibility(false)
+    }
+  }, [isSessionFlowSidebarOpen, sessionFlowRuntimeOpen, sessionFlowDisplayMode, isDesktop, isFullscreen])
 
   // Track diff sidebar width for responsive header
   const storedDiffSidebarWidth = useAtomValue(agentsDiffSidebarWidthAtom)
@@ -4586,6 +4609,14 @@ Make sure to preserve all functionality from both branches when resolving confli
     { worktreePath: worktreePath || "" },
     { enabled: !!worktreePath && isDiffSidebarOpen, staleTime: 30000 }
   )
+
+  // Refetch git status when diff sidebar opens (background refresh - don't block UI)
+  // This ensures fresh data when sidebar reopens after a commit
+  useEffect(() => {
+    if (isDiffSidebarOpen && worktreePath) {
+      refetchGitStatus()
+    }
+  }, [isDiffSidebarOpen, worktreePath, refetchGitStatus])
 
   // Refetch git status and diff stats when window gains focus
   useEffect(() => {

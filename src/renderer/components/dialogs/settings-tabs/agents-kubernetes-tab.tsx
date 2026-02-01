@@ -1,5 +1,5 @@
 import { useAtom } from "jotai"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   clustersFeatureEnabledAtom,
   clustersDefaultNamespaceAtom,
@@ -11,6 +11,7 @@ import { Input } from "../../ui/input"
 import { Button } from "../../ui/button"
 import { Label } from "../../ui/label"
 import { Server, Loader2, FolderOpen, Settings, ChevronDown, ChevronUp } from "lucide-react"
+import { toast } from "sonner"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -30,20 +31,24 @@ function useIsNarrowScreen(): boolean {
 }
 
 // DevSpace Settings Component
-function DevSpaceSettings() {
+function DevSpaceSettings({ autoExpand = false }: { autoExpand?: boolean }) {
   const utils = trpc.useUtils()
   const { data: settings, isLoading } = trpc.devspace.getSettings.useQuery()
   const updateMutation = trpc.devspace.updateSettings.useMutation({
     onSuccess: () => {
       utils.devspace.getSettings.invalidate()
       utils.devspace.listDevspaceServices.invalidate()
+      toast.success("DevSpace settings saved")
+    },
+    onError: (error) => {
+      toast.error(`Failed to save settings: ${error.message}`)
     },
   })
 
   const [localReposPath, setLocalReposPath] = useState("")
   const [localConfigSubPath, setLocalConfigSubPath] = useState("")
   const [localStartCommand, setLocalStartCommand] = useState("")
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(autoExpand)
 
   // Sync local state with server data
   useEffect(() => {
@@ -62,11 +67,36 @@ function DevSpaceSettings() {
     })
   }
 
-  const hasChanges = settings && (
-    (localReposPath.trim() || null) !== settings.reposPath ||
-    localConfigSubPath.trim() !== settings.configSubPath ||
-    localStartCommand.trim() !== settings.startCommand
-  )
+  // Check if there are unsaved changes or if settings haven't loaded yet
+  const hasChanges = useMemo(() => {
+    // If still loading, can't save
+    if (isLoading) return false
+
+    // If settings exist, check for changes from server state
+    if (settings) {
+      return (
+        (localReposPath.trim() || null) !== settings.reposPath ||
+        localConfigSubPath.trim() !== settings.configSubPath ||
+        localStartCommand.trim() !== settings.startCommand
+      )
+    }
+
+    // If settings don't exist yet (first time), enable save if any field has a value
+    return !!(localReposPath.trim() || localConfigSubPath.trim() || localStartCommand.trim())
+  }, [settings, localReposPath, localConfigSubPath, localStartCommand, isLoading])
+
+  const handleSelectFolder = async () => {
+    if (typeof window !== "undefined" && window.desktopApi?.showOpenDialog) {
+      const result = await window.desktopApi.showOpenDialog({
+        title: "Select repos directory",
+        properties: ["openDirectory"],
+      })
+
+      if (result && result.length > 0) {
+        setLocalReposPath(result[0])
+      }
+    }
+  }
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -112,6 +142,7 @@ function DevSpaceSettings() {
                     variant="outline"
                     size="icon"
                     className="flex-shrink-0"
+                    onClick={handleSelectFolder}
                   >
                     <FolderOpen className="h-4 w-4" />
                   </Button>
@@ -187,6 +218,17 @@ export function AgentsKubernetesTab() {
 
   // DevSpace feature state
   const [devspaceEnabled, setDevspaceEnabled] = useAtom(devspaceFeatureEnabledAtom)
+  const [devspaceJustEnabled, setDevspaceJustEnabled] = useState(false)
+
+  // Track when devspace is toggled on to auto-expand settings
+  useEffect(() => {
+    if (devspaceEnabled) {
+      setDevspaceJustEnabled(true)
+      // Reset after render so it doesn't stay true
+      const timer = setTimeout(() => setDevspaceJustEnabled(false), 100)
+      return () => clearTimeout(timer)
+    }
+  }, [devspaceEnabled])
 
   // Get derived namespace from email env vars or git config
   const { data: derivedNamespace } = trpc.clusters.getDefaultNamespace.useQuery(undefined, {
@@ -337,7 +379,7 @@ export function AgentsKubernetesTab() {
       {/* DevSpace Settings - only show when feature is enabled */}
       {devspaceEnabled && (
         <div className="space-y-4">
-          <DevSpaceSettings />
+          <DevSpaceSettings autoExpand={devspaceJustEnabled} />
         </div>
       )}
     </div>
