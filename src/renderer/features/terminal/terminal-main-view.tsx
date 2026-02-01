@@ -143,7 +143,7 @@ export function TerminalMainView() {
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <div className="flex items-center gap-1 px-2 py-1.5 flex-shrink-0 border-b border-border/50" style={{ backgroundColor: terminalBg }}>
-        <TerminalTabs terminals={terminals} activeTerminalId={activeTerminalId} cwds={{}} initialCwd={cwd} terminalBg={terminalBg} onSelectTerminal={selectTerminal} onCloseTerminal={closeTerminal} onCloseOtherTerminals={closeOtherTerminals} onCloseTerminalsToRight={closeTerminalsToRight} onCreateTerminal={createTerminal} onRenameTerminal={renameTerminal} />
+        <TerminalTabs terminals={terminals} activeTerminalId={activeTerminalId} cwds={terminalCwds} initialCwd={cwd} terminalBg={terminalBg} onSelectTerminal={selectTerminal} onCloseTerminal={closeTerminal} onCloseOtherTerminals={closeOtherTerminals} onCloseTerminalsToRight={closeTerminalsToRight} onCreateTerminal={createTerminal} onRenameTerminal={renameTerminal} />
       </div>
       <div className="flex-1 min-h-0 min-w-0 overflow-hidden" style={{ backgroundColor: terminalBg }}>
         {activeTerminal ? (
