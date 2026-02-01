@@ -228,6 +228,14 @@ export function ChangesView({
 		},
 	);
 
+	// Refetch status when component mounts to ensure fresh data after reopening
+	// This handles cases where commits happened while the panel was closed
+	useEffect(() => {
+		if (worktreePath) {
+			refetch();
+		}
+	}, [worktreePath, refetch]);
+
 	const { pr, refetch: refetchPRStatus } = usePRStatus({
 		worktreePath,
 		refetchInterval: 10000,
